@@ -5,7 +5,6 @@
 #include <string.h>
 #include <stdio.h>
 
-
 static uint8_t *rx_bufs[NUM_TRANS_BUFFERS];
 static spi_slave_transaction_t trans[NUM_TRANS_BUFFERS];
 
@@ -54,7 +53,7 @@ bool SPI_Slave_Init(void)
         return false;
     }
 
-    size_t buf_len = dma_len(sizeof(sensor_packet_t));
+    size_t buf_len = dma_len(sizeof(sensor_packet));
 
     for (int i = 0; i < NUM_TRANS_BUFFERS; i++) {
         // DMA-capable, 4-byte-aligned buffer -- a stack/regular-heap
@@ -82,7 +81,7 @@ bool SPI_Slave_Init(void)
     return true;
 }
 
-bool SPI_Slave_Receive(sensor_packet_t *packet)
+bool SPI_Slave_Receive(sensor_packet *packet)
 {
     if (packet == NULL) {
         return false;
@@ -95,17 +94,17 @@ bool SPI_Slave_Receive(sensor_packet_t *packet)
         return false;
     }
 
-    size_t buf_len   = dma_len(sizeof(sensor_packet_t));
+    size_t buf_len   = dma_len(sizeof(sensor_packet));
     size_t got_bytes = done_trans->trans_len / 8; // ACTUAL bits clocked in, not the max
 
     bool ok = false;
 
-    if (got_bytes >= sizeof(sensor_packet_t)) {
-        sensor_packet_t candidate;
-        memcpy(&candidate, done_trans->rx_buffer, sizeof(sensor_packet_t));
+    if (got_bytes >= sizeof(sensor_packet)) {
+        sensor_packet candidate;
+        memcpy(&candidate, done_trans->rx_buffer, sizeof(sensor_packet));
 
         if (candidate.magic == SENSOR_PACKET_MAGIC) {
-            uint8_t calc_crc = crc8((uint8_t *)&candidate, sizeof(sensor_packet_t) - 1);
+            uint8_t calc_crc = crc8((uint8_t *)&candidate, sizeof(sensor_packet) - 1);
             if (calc_crc == candidate.crc) {
                 *packet = candidate;
                 ok = true;

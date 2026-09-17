@@ -4,8 +4,6 @@
 #include "Queues.h"
 
 
-
-
 void SPI_Slave_app(void *pvParameters)
 {
     if (!SPI_Slave_Init())
@@ -19,7 +17,7 @@ void SPI_Slave_app(void *pvParameters)
     // Plain struct is fine here -- SPI_Slave_Receive() copies the
     // validated packet into it; the actual DMA-capable buffers are
     // allocated internally by SPI_Slave_Init().
-    static sensor_packet_t receivedPacket;
+    static sensor_packet receivedPacket;
  
     while (1)
     {

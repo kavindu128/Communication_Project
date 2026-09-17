@@ -1,10 +1,6 @@
-#ifndef WIFI_APP_H
-#define WIFI_APP_H
-
 #include <Arduino.h>
 
 #include "WIFI_app.h"
-#include "WIFI_driver.h"
 #include "Sensor_Packet.h"
 #include "Queues.h"
 
@@ -20,7 +16,7 @@ void WIFI_app(void *pvParameters)
 
     Serial.println("WiFi initialized successfully");
 
-    static sensor_packet_t Packet;
+    static sensor_packet Packet;
 
     while (1)
     {
@@ -42,7 +38,7 @@ void WIFI_app(void *pvParameters)
         }
 
         // Send packet through WiFi
-        if (WIFI_SendData((const uint8_t *)&Packet, sizeof(sensor_packet_t)))
+        if (WIFI_SendData((const uint8_t *)&Packet, sizeof(sensor_packet)))
         {  
             Serial.printf(
                 "WiFi: Packet %d sent successfully\n",
@@ -59,5 +55,4 @@ void WIFI_app(void *pvParameters)
     }
 
 }
-#endif // WIFI_APP_H
 

@@ -14,7 +14,7 @@ void LoRa_app(void* pvParameters)
 
     Serial.println("LoRa initialized successfully");
 
-     static sensor_packet_t packet;
+     static sensor_packet packet;
 
     while (1)
     {
@@ -41,7 +41,7 @@ void LoRa_app(void* pvParameters)
             // Send SensorPacket through LoRa
             if (LoRa_send(
                     (const uint8_t *)&packet,
-                    sizeof(sensor_packet_t)))
+                    sizeof(sensor_packet)))
             {
                 Serial.printf(
                     "LoRa: Packet %d sent successfully\n",

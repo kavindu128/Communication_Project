@@ -1,5 +1,5 @@
 #pragma once
-#include <stdint.h>
+// #include <stdint.h>
  
 // Fixed sync word so the receiver can tell a real frame from garbage.
 #define SENSOR_PACKET_MAGIC 0xA55A
@@ -15,4 +15,4 @@ typedef struct __attribute__((packed)) {
     float    soil_moisture;
     float    soil_ph;
     uint8_t  crc;            // CRC8 over every byte above (not itself)
-} sensor_packet_t;
+} sensor_packet;

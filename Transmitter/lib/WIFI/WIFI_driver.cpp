@@ -1,18 +1,8 @@
 #include "WIFI_driver.h"
-#include <Arduino.h>
 #include <WiFi.h>
-
-#define WIFI_SSID       "ESP32_SENSOR"
-#define WIFI_PASSWORD   "12345678"
-#define WIFI_PORT       5000
 
 WiFiServer server(WIFI_PORT);
 WiFiClient client;
-
-
-// =====================================
-// WiFi Initialization
-// =====================================
 
 bool WIFI_Init()
 {
