@@ -2,8 +2,9 @@
 #define LORA_APP_H
 
 #include "LoRa_driver.h"
-#include <Arduino.h>
 #include "Queues.h"
+
+extern TaskHandle_t LoRaAppHandle;
 
 void LoRa_app(void* pvParameters);
 

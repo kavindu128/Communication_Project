@@ -1,9 +1,4 @@
 #include "SPI_Slave_driver.h"
-#include "driver/spi_slave.h"
-#include "driver/gpio.h"
-#include "esp_heap_caps.h"
-#include <string.h>
-#include <stdio.h>
 
 static uint8_t *rx_bufs[NUM_TRANS_BUFFERS];
 static spi_slave_transaction_t trans[NUM_TRANS_BUFFERS];

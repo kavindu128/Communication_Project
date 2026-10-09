@@ -1,6 +1,8 @@
 #include "LoRa_app.h"
 #include "Sensor_Packet.h"
 
+TaskHandle_t LoRaAppHandle;
+
 void LoRa_app(void* pvParameters)
 {
     Serial.println("LoRa Transmitter Starting...");
@@ -56,6 +58,7 @@ void LoRa_app(void* pvParameters)
                 );
             }
         }
+        
     }
 }
 

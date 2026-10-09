@@ -3,7 +3,6 @@
 
 #include "LoRa_hal.h"
 
-#include <Arduino.h>
 #include <SPI.h>
 #include <LoRa.h>
 

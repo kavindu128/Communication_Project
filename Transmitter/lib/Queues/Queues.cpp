@@ -4,17 +4,15 @@
 QueueHandle_t sensorData_to_LoRa_Queue;   
 QueueHandle_t ack_from_LoRa_Queue;        
 
-
 QueueHandle_t sensorData_to_SIM7600_Queue; 
 QueueHandle_t ack_from_SIM7600_Queue;     
-
 
 QueueHandle_t sensorData_to_SIM7080_Queue; 
 QueueHandle_t ack_from_SIM7080_Queue;      
 
 QueueHandle_t sensorData_to_WiFi_Queue;  
 
-#define QUEUE_LENGTH 2
+#define QUEUE_LENGTH 10
 #define QUEUE_ITEM_SIZE sizeof(sensor_packet)
 
 void Queue_Init()

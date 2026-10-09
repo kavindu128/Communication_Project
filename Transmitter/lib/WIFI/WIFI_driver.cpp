@@ -1,145 +1,34 @@
 #include "WIFI_driver.h"
 #include <WiFi.h>
 
-WiFiServer server(WIFI_PORT);
-WiFiClient client;
+static WiFiClient wifiClient;
 
-bool WIFI_Init()
-{
-    Serial.println("Starting WiFi AP...");
-
-    WiFi.mode(WIFI_AP);
-
-    if (!WiFi.softAP(WIFI_SSID, WIFI_PASSWORD))
-    {
-        Serial.println("WiFi AP creation failed");
-        return false;
-    }
-
-    Serial.println("WiFi AP created successfully");
-
-    Serial.print("SSID: ");
-    Serial.println(WIFI_SSID);
-
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.softAPIP());
-
-    server.begin();
-
-    Serial.print("TCP Server Port: ");
-    Serial.println(WIFI_PORT);
-
-    return true;
+void WIFI_Driver_Init() {
+    // Set WiFi to station mode (client) and disconnect from any previous networks
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(true);
+    delay(100);
 }
 
-
-// WiFi Send
-
-
-bool WIFI_SendData(
-    const uint8_t *data,
-    size_t len
-)
-{
-
-    // Check connected client
-    {
-    if (data == NULL || len == 0)
-    {
-        return false;
-    }
-
-    // Check for new client
-    if (!client || !client.connected())
-    {
-        WiFiClient newClient = server.available();
-
-        if (newClient)
-        {
-            client = newClient;
-
-            Serial.println("WiFi client connected");
-        }
-        else
-        {
-            return false;
-        }
-    }
-
-    // Send packet
-    size_t sent = client.write(
-        data,
-        len
-    );
-
-    if (sent == len)
-    {
-        // Serial.print("WiFi packet sent: ");
-        // Serial.print(sent);
-        // Serial.println(" bytes");
-
-        return true;
-    }
-
-    Serial.println("WiFi packet send failed");
-
-    return false;
-    }
-
-
-}
-// WiFi Receive
-
-
-bool WIFI_ReceiveData(
-    uint8_t *data,
-    size_t len
-)
-{
-    // Check data
-    if (data == NULL || len == 0)
-    {
-        return false;
-    }
-
-
-    // Check connected client
-    if (!client || !client.connected())
-    {
-        client = server.available();
-
-        if (!client)
-        {
-            return false;
-        }
-
-        Serial.println("WiFi client connected");
-    }
-
-
-    // Check if enough data is available
-    if (client.available() >= len)
-    {
-        size_t received = client.read(data, len);
-
-        if (received == len)
-        {
-            Serial.print("WiFi received: ");
-            Serial.print(received);
-            Serial.println(" bytes");
-
-            return true;
-        }
-        else
-        {
-            Serial.println("WiFi receive failed");
-
-            return false;
-        }
-    }
-
-
-    // Data is not available yet
-    return false;
+void WIFI_Driver_Connect(const char* ssid, const char* password) {
+    Serial.printf("Connecting to SSID: %s\n", ssid);
+    WiFi.begin(ssid, password);
 }
 
+bool WIFI_Driver_IsConnected() {
+    if (WiFi.getMode() == WIFI_MODE_NULL) {
+        return false; // Radio is off, do not poll WiFi.status()
+    }
+    
+    // 2. Only poll the status if the radio is active
+    return WiFi.status() == WL_CONNECTED;
+}
+
+void WIFI_Driver_PrintIP() {
+    Serial.print("WiFi Connected. IP Address: ");
+    Serial.println(WiFi.localIP());
+}
+
+Client* WIFI_Driver_GetClient() {
+    return &wifiClient;
+}

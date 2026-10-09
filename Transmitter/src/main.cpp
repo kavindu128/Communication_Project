@@ -3,52 +3,34 @@
 #include "Queues.h"
 #include "WIFI_app.h"
 #include "LoRa_app.h"
-
-TaskHandle_t SPIAppHandle;
-TaskHandle_t WiFiAppHandle;
-TaskHandle_t LoRaAppHandle;
+#include "SIM7600_app.h"
+#include "MQTT_app.h"
 
 
 void setup()
 {
     Serial.begin(115200);
 
-    delay(1000);
-    Serial.println("SPI Slave Starting...");
+    vTaskDelay(pdMS_TO_TICKS(1000));
 
     Queue_Init();
 
-    xTaskCreate(
-        SPI_Slave_app,
-        "SPI App",
-        4096,
-        NULL,
-        3,
-        &SPIAppHandle
-    );
+    xTaskCreatePinnedToCore(SIM7600_app, "SIM7600_app", 4096, NULL, 1, &SIM7600AppHandle, 1);
 
-    // xTaskCreate(
-    //     WIFI_app,             // Task function
-    //     "WiFi App",           // Task name
-    //     4096,                 // Stack size
-    //     NULL,                 // Parameters
-    //     1,                    // Priority
-    //     &WiFiAppHandle        // Task handle
-    // );
+    //xTaskCreatePinnedToCore(WIFI_app, "WiFi App", 4096, NULL, 1, &WiFiAppHandle,1);
 
-     xTaskCreate(
-        LoRa_app,
-        "LoRa Task",
-        4096,
-        NULL,
-        2,
-        &LoRaAppHandle
-    );
+    xTaskCreatePinnedToCore(MQTT_app, "MQTT App", 4096, NULL, 1, &MQTTAppHandle,1);
+
+    //xTaskCreatePinnedToCore(SPI_Slave_app, "SPI App", 4096, NULL, 3, &SPIAppHandle,1); // xTaskCreatePinnedToCore
+
+    
+
+    //xTaskCreatePinnedToCore(LoRa_app, "LoRa Task", 4096, NULL, 2, &LoRaAppHandle,1);
+
+    
 }
-
-
+    
 
 void loop()
 {
 }
-

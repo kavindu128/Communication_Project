@@ -1,8 +1,8 @@
-#include "SPI_Slave_driver.h"
 #include "SPI_Slave_app.h"
 #include "Sensor_Packet.h"
 #include "Queues.h"
 
+TaskHandle_t SPIAppHandle;
 
 void SPI_Slave_app(void *pvParameters)
 {
@@ -53,5 +53,6 @@ void SPI_Slave_app(void *pvParameters)
             // bad gets pushed into the queues.
             Serial.println("SPI receive failed or packet invalid");
         }
+        
     }
 }

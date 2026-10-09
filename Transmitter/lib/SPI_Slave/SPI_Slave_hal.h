@@ -1,7 +1,6 @@
 #ifndef SPI_SLAVE_HAL_H
 #define SPI_SLAVE_HAL_H
 
-
 #define SPI_SLAVE_MOSI_PIN        11
 #define SPI_SLAVE_MISO_PIN        13
 #define SPI_SLAVE_SCK_PIN         12
