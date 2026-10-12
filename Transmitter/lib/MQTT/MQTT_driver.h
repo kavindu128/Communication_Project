@@ -9,6 +9,7 @@
 #include "SIM7600_driver.h"
 #include "WIFI_hal.h"
 #include "MQTT_hal.h" 
+#include "SIM7600_app.h"
 
 void MQTT_Driver_Init();
 bool MQTT_Driver_Connect(); 

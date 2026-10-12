@@ -5,6 +5,8 @@
 #include "LoRa_app.h"
 #include "SIM7600_app.h"
 #include "MQTT_app.h"
+#include "sim7600test_app.h"
+
 
 
 void setup()
@@ -14,6 +16,10 @@ void setup()
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     Queue_Init();
+    SIM7600_app_init();
+
+    xTaskCreatePinnedToCore(SIM7600_Test_app, "SIM7600_Test_app", 4096, NULL, 1, &SIM7600TestHandle,1);
+    
 
     xTaskCreatePinnedToCore(SIM7600_app, "SIM7600_app", 4096, NULL, 1, &SIM7600AppHandle, 1);
 
@@ -21,7 +27,7 @@ void setup()
 
     xTaskCreatePinnedToCore(MQTT_app, "MQTT App", 4096, NULL, 1, &MQTTAppHandle,1);
 
-    //xTaskCreatePinnedToCore(SPI_Slave_app, "SPI App", 4096, NULL, 3, &SPIAppHandle,1); // xTaskCreatePinnedToCore
+    xTaskCreatePinnedToCore(SPI_Slave_app, "SPI App", 4096, NULL, 3, &SPIAppHandle,1); // xTaskCreatePinnedToCore
 
     
 

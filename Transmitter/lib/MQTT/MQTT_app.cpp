@@ -3,15 +3,20 @@
 TaskHandle_t MQTTAppHandle;
 
 void MQTT_app(void *pvParameters) {
-    vTaskDelay(pdMS_TO_TICKS(15000));
+    while (SIM7600_State != SIM7600_CONNECTED) {
+    vTaskDelay(pdMS_TO_TICKS(500));
+    }
 
+    xSemaphoreTake(ModemMutex, portMAX_DELAY);
     MQTT_Driver_Init();
+    xSemaphoreGive(ModemMutex);
+
     sensor_packet dataToSend; 
 
     for (;;) {
         // Note: SIM7600_Driver_IsConnected() is safe outside the Mutex 
         // because you updated it to return a cached memory variable.
-        if (WIFI_Driver_IsConnected() || SIM7600_Driver_IsConnected()) {
+        if (WIFI_Driver_IsConnected() || SIM7600_State == SIM7600_CONNECTED) {
             
             // 1. TAKE MUTEX: Wait up to 5 seconds for the physical UART lines
             if (xSemaphoreTake(ModemMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
@@ -19,7 +24,7 @@ void MQTT_app(void *pvParameters) {
                 if (!MQTT_Driver_IsConnected()) {
                     if (!MQTT_Driver_Connect()) {
                         Serial.println("MQTT Connection failed. Resetting SIM flag...");
-                        SIM7600_Driver_SetDisconnected(); 
+        
                         vTaskDelay(pdMS_TO_TICKS(2000));
                     }
                 } else {
