@@ -18,7 +18,9 @@ static void powerOnSIM7600G() {
 
 void SIM7600_HAL_Init() {
     powerOnSIM7600G();
-    
-    SimSerial.setRxBufferSize(1024); 
+
+    SimSerial.end();                    // on a 2nd start the port is already running: stop it first
+    SimSerial.setRxBufferSize(1024);    // (the buffer can only be resized while the port is stopped)
+
     SimSerial.begin(SIM7600_BAUD_RATE, SERIAL_8N1, SIM7600_RX, SIM7600_TX);
 }

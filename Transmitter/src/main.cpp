@@ -4,8 +4,9 @@
 #include "WIFI_app.h"
 #include "LoRa_app.h"
 #include "SIM7600_app.h"
+#include "WIFI_app.h"
 #include "MQTT_app.h"
-#include "sim7600test_app.h"
+#include "test_app.h"
 
 
 
@@ -17,13 +18,14 @@ void setup()
 
     Queue_Init();
     SIM7600_app_init();
+    WIFI_app_init();
 
-    xTaskCreatePinnedToCore(SIM7600_Test_app, "SIM7600_Test_app", 4096, NULL, 1, &SIM7600TestHandle,1);
+    xTaskCreatePinnedToCore(Test_app, "Test_app", 4096, NULL, 1, &TestHandle,1);
     
 
     xTaskCreatePinnedToCore(SIM7600_app, "SIM7600_app", 4096, NULL, 1, &SIM7600AppHandle, 1);
 
-    //xTaskCreatePinnedToCore(WIFI_app, "WiFi App", 4096, NULL, 1, &WiFiAppHandle,1);
+    xTaskCreatePinnedToCore(WIFI_app, "WiFi App", 4096, NULL, 1, &WiFiAppHandle,1);
 
     xTaskCreatePinnedToCore(MQTT_app, "MQTT App", 4096, NULL, 1, &MQTTAppHandle,1);
 

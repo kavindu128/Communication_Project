@@ -8,7 +8,9 @@
 
 void WIFI_Driver_Init();
 void WIFI_Driver_Connect(const char* ssid, const char* password);
+void WIFI_Driver_Disconnect(); 
 bool WIFI_Driver_IsConnected();
+void WIFI_Driver_PowerOff();
 Client* WIFI_Driver_GetClient();
 void WIFI_Driver_PrintIP();
 

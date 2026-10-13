@@ -1,8 +1,8 @@
 #include "SIM7600_driver.h"
 #include "SIM7600_hal.h"
 
-// Must define the modem model before including TinyGSM
-// #define TINY_GSM_DEBUG Serial        // uncomment to see the raw modem messages
+
+// #define TINY_GSM_DEBUG Serial       
 #define TINY_GSM_MODEM_SIM7600
 #include <TinyGsmClient.h>
  

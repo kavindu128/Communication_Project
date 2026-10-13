@@ -10,10 +10,10 @@
 
 extern SemaphoreHandle_t ModemMutex;
 
-void SIM7600_Driver_Init();                    // power key + modem restart
+void SIM7600_Driver_Init();                   
 bool SIM7600_Driver_ConnectGPRS(const char* apn);
-bool SIM7600_Driver_IsConnected();             // asks the modem (needs the mutex)
-void SIM7600_Driver_PowerOff();                // close GPRS and power the modem down
+bool SIM7600_Driver_IsConnected();             
+void SIM7600_Driver_PowerOff();                
 void SIM7600_Driver_SetDisconnected();
 Client* SIM7600_Driver_GetClient();
 
