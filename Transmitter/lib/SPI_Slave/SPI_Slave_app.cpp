@@ -41,10 +41,7 @@ void SPI_Slave_app(void *pvParameters)
                 receivedPacket.soil_ph
             );
  
-            xQueueSend(sensorData_to_LoRa_Queue, &receivedPacket, 0);
-            xQueueSend(sensorData_to_SIM7600_Queue, &receivedPacket, 0);
-            xQueueSend(sensorData_to_SIM7080_Queue, &receivedPacket, 0);
-            xQueueSend(sensorData_to_WiFi_Queue, &receivedPacket, 0);
+            xQueueSend(sensorData_to_Transmeter, &receivedPacket, 0);
         }
         else
         {

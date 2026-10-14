@@ -22,7 +22,7 @@ void LoRa_app(void* pvParameters)
     {
         // Wait for SensorPacket from queue
         if (xQueueReceive(
-                sensorData_to_LoRa_Queue,
+                sensorData_to_Transmeter,
                 &packet,
                 portMAX_DELAY))
         {

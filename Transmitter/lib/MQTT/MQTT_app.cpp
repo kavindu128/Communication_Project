@@ -95,7 +95,7 @@ void MQTT_app(void *pvParameters) {
 
                 // PEEK: the packet is removed only after the publish succeeded,
                 // so nothing is lost if the network drops in the middle.
-                if (xQueuePeek(sensorData_to_WiFi_Queue, &dataToSend, 0) == pdPASS) {
+                if (xQueuePeek(sensorData_to_Transmeter, &dataToSend, 0) == pdPASS) {
                     char jsonPayload[256];
                     snprintf(jsonPayload, sizeof(jsonPayload), 
                         "{\"packet_id\":%u, \"water_ph\":%.2f, \"turbidity\":%.2f, \"soil_moisture\":%.2f, \"soil_ph\":%.2f}", 
@@ -104,7 +104,7 @@ void MQTT_app(void *pvParameters) {
                     );
 
                     if (MQTT_Driver_Publish("v1/devices/me/telemetry", jsonPayload)) {
-                        xQueueReceive(sensorData_to_WiFi_Queue, &dataToSend, 0);   // now remove it
+                        xQueueReceive(sensorData_to_Transmeter, &dataToSend, 0);   // now remove it
                         Serial.printf("Published SPI data via %s.\n",
                                       bound == MQTT_TRANSPORT_WIFI ? "WiFi" : "4G");
                     } else {
