@@ -15,7 +15,7 @@ extern SemaphoreHandle_t SIM7600_ON_FLAG;
 extern SemaphoreHandle_t SIM7600_OFF_FLAG;
 extern SemaphoreHandle_t SIM7600_CONNECTED_FLAG; 
 
-extern uint8_t SIM7600_State;
+extern  uint8_t SIM7600_State;
 
 void SIM7600_app_init();
 void SIM7600_app(void * pvParameters);

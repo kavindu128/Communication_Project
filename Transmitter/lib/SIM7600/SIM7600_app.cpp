@@ -15,6 +15,9 @@ void SIM7600_app_init() {
     SIM7600_ON_FLAG = xSemaphoreCreateBinary();
     SIM7600_OFF_FLAG = xSemaphoreCreateBinary();
     SIM7600_CONNECTED_FLAG = xSemaphoreCreateBinary();
+    if (ModemMutex == NULL) {
+        ModemMutex = xSemaphoreCreateMutex();   // exists from boot, never NULL for other tasks
+    }
 }
 
 

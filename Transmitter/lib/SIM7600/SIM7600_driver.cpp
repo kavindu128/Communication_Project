@@ -9,14 +9,15 @@
 // Initialize the modem using the Serial2 interface provided by the HAL
 static TinyGsm modem(SimSerial);
 static TinyGsmClient cellularClient(modem);
-static bool gprs_is_connected = false;
+static volatile bool gprs_is_connected = false;   // cached: read by other tasks without AT commands
  
 SemaphoreHandle_t ModemMutex = NULL;
  
 void SIM7600_Driver_Init() {
-    if (ModemMutex == NULL) {                  // create it only once
+    if (ModemMutex == NULL) {                  // normally already created in SIM7600_app_init()
         ModemMutex = xSemaphoreCreateMutex();
     }
+    gprs_is_connected = false;                 // modem is (re)starting: no link yet
     SIM7600_HAL_Init();
  
     //Serial.println("Initializing TinyGSM modem...");
@@ -39,6 +40,11 @@ bool SIM7600_Driver_IsConnected() {
     return gprs_is_connected;
 }
  
+// Cached flag only - NO AT command, safe to call from any task at any time
+bool SIM7600_Driver_IsLinkUp() {
+    return gprs_is_connected;
+}
+
 void SIM7600_Driver_PowerOff() {
     gprs_is_connected = false;
     cellularClient.stop();

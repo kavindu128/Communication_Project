@@ -12,7 +12,7 @@ QueueHandle_t ack_from_SIM7080_Queue;
 
 QueueHandle_t sensorData_to_WiFi_Queue;  
 
-#define QUEUE_LENGTH 10
+#define QUEUE_LENGTH 100
 #define QUEUE_ITEM_SIZE sizeof(sensor_packet)
 
 void Queue_Init()
