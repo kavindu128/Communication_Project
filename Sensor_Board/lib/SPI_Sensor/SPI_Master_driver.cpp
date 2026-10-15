@@ -1,4 +1,4 @@
-#include "SPI_Sensor_driver.h"
+#include "SPI_Master_driver.h"
 #include <SPI.h>
 #include "Sensor_Packet.h"
 #include <string>
@@ -17,7 +17,7 @@ static uint8_t crc8(const uint8_t *data, size_t len)
     return crc;
 }
  
-bool SPI_Sensor_Init(void)
+bool SPI_Master_Init(void)
 {
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_CS);
     pinMode(SPI_CS, OUTPUT);
@@ -25,7 +25,7 @@ bool SPI_Sensor_Init(void)
     return true;
 }
 
-bool SPI_Sensor_Send_Packet(sensor_packet_t *packet)
+bool SPI_Master_Send_Packet(sensor_packet_t *packet)
 {
     if (packet == NULL) {
         return false;

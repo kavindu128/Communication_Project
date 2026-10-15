@@ -1,5 +1,5 @@
-#ifndef SPI_SENSOR_HAL_H
-#define SPI_SENSOR_HAL_H
+#ifndef SPI_MASTER_HAL_H
+#define SPI_MASTER_HAL_H
 
 #define SPI_SCK   12
 #define SPI_MISO  13

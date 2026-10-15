@@ -1,5 +1,5 @@
-#include "SPI_Sensor_driver.h"
-#include "SPI_app.h"
+#include "SPI_Master_driver.h"
+#include "SPI_Master_app.h"
 #include <stdint.h>
 #include "Sensor_Packet.h"   
 
@@ -16,10 +16,10 @@ static sensor_packet_t sensorPackets[] =
 
 #define NUM_PACKETS (sizeof(sensorPackets) / sizeof(sensorPackets[0]))
 
-void SPI_app(void *pvParameters)
+void SPI_Master_app(void *pvParameters)
 {
     // Initialize SPI
-    if (!SPI_Sensor_Init())
+    if (!SPI_Master_Init())
     {
         Serial.println("SPI initialization failed");
         vTaskDelete(NULL);
@@ -34,7 +34,7 @@ void SPI_app(void *pvParameters)
         {
             // Fills in magic + crc automatically, sends the struct's
             // bytes unmodified, in order.
-            bool sent = SPI_Sensor_Send_Packet(&sensorPackets[i]); 
+            bool sent = SPI_Master_Send_Packet(&sensorPackets[i]); 
             if (!sent)
             {
                 Serial.println("SPI send failed");
