@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include "SPI_app.h"
+#include "SPI_Master_app.h"
 
 TaskHandle_t SPIAppHandle;
 
@@ -9,8 +9,8 @@ void setup()
 
     // Create SPI application task
     xTaskCreate(
-        SPI_app,
-        "SPI App",
+        SPI_Master_app,
+        "SPI Master App",
         4096,
         NULL,
         1,
