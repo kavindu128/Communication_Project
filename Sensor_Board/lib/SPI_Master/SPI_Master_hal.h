@@ -6,6 +6,6 @@
 #define SPI_MOSI  11
 #define SPI_CS    10
 
+#define SPI_CLOCK_HZ  1000000
 
-
-#endif // SPI_SENSOR_HAL_H
+#endif // SPI_MASTER_HAL_H

@@ -1,4 +1,5 @@
 #include "MQTT_driver.h"
+#include "MQTT_app.h"
 
 //const char* BROKER = "mqtt.thingsboard.cloud";
 const char* BROKER = "54.159.242.170";
@@ -10,12 +11,19 @@ const char* PASSWORD  = "test1234";
 static PubSubClient mqttClient;
 static bool clientBound = false;
 
+static void callback(
+    char* topic,
+    byte* payload,
+    unsigned int length
+);
+
 void MQTT_Driver_Init() {
     // No client is bound here: the network may not exist yet.
     // MQTT_app binds WiFi or 4G when one of them is really up.
     mqttClient.setServer(BROKER, PORT);
     mqttClient.setKeepAlive(60);
     mqttClient.setBufferSize(512);
+    mqttClient.setCallback(callback);
 }
 
 void MQTT_Driver_BindClient(Client* client, uint16_t timeoutSec) {
@@ -61,4 +69,41 @@ bool MQTT_Driver_Publish(const char* topic, const char* payload) {
 bool MQTT_Driver_IsConnected() {
     if (!clientBound) return false;
     return mqttClient.connected();
+}
+
+bool MQTT_Driver_SubscribeCommands()
+{
+    return mqttClient.subscribe(
+        "v1/devices/me/rpc/request/+"
+    );
+}
+
+void callback(char* topic, byte* payload, unsigned int length)
+{
+    Serial.println("\n--- MQTT COMMAND RECEIVED ---");
+
+    Serial.print("Topic: ");
+    Serial.println(topic);
+
+    StaticJsonDocument<256> doc;
+
+    DeserializationError error =
+        deserializeJson(doc, payload, length);
+
+    if (error)
+    {
+        Serial.println("JSON parsing failed");
+        return;
+    }
+
+    const char* method = doc["method"] | "";
+    bool state = doc["params"] | false;
+
+    Serial.print("Method: ");
+    Serial.println(method);
+
+    Serial.print("State: ");
+    Serial.println(state ? "ON" : "OFF");
+
+    MQTT_App_ProcessCommand(method, state);
 }

@@ -41,12 +41,43 @@ static void teardown(MQTT_Transport old) {
     }
 }
 
+void MQTT_App_ProcessCommand(const char* method, bool state)
+{
+    if (strcmp(method, "SIM7600") == 0)
+    {
+        if (state)
+        {
+            xSemaphoreGive(SIM7600_ON_FLAG);
+            Serial.println("SIM7600 ON command received");
+        }
+        else
+        {
+            xSemaphoreGive(SIM7600_OFF_FLAG);
+            Serial.println("SIM7600 OFF command received");
+        }
+    }
+
+    else if (strcmp(method, "WIFI") == 0)
+    {
+        if (state)
+        {
+            xSemaphoreGive(WIFI_ON_FLAG);
+            Serial.println("WIFI ON command received");
+        }
+        else 
+        {
+            xSemaphoreGive(WIFI_OFF_FLAG);
+            Serial.println("WIFI OFF command received");
+        }
+    }
+}
+
 void MQTT_app(void *pvParameters) {
 
     // No waiting for the SIM here: WiFi may be the only network for a while.
     MQTT_Driver_Init();
 
-    sensor_packet dataToSend;
+    SensorPacket dataToSend;
     MQTT_Transport bound = MQTT_TRANSPORT_NONE;   // network the MQTT session is attached to
     uint32_t nextConnectTry = 0;
 
@@ -81,33 +112,70 @@ void MQTT_app(void *pvParameters) {
         }
 
         // 4. Work on the active network (mutex only if it is the 4G modem)
-        if (takeIfNeeded(bound, pdMS_TO_TICKS(5000))) {
+        if (takeIfNeeded(bound, pdMS_TO_TICKS(5000)))
+        {
+            if (!MQTT_Driver_IsConnected())
+            {
+                // Connect only when disconnected
+                if ((int32_t)(millis() - nextConnectTry) >= 0)
+                {
+                    Serial.println("MQTT: Trying to connect...");
 
-            if (!MQTT_Driver_IsConnected()) {
-                if ((int32_t)(millis() - nextConnectTry) >= 0) {
-                    if (!MQTT_Driver_Connect()) {
-                        nextConnectTry = millis() + MQTT_RETRY_MS;   // retry later, no sleeping with the mutex held
+                    if (MQTT_Driver_Connect())
+                    {
+                        Serial.println("MQTT: Connected");
+
+                        if (MQTT_Driver_SubscribeCommands())
+                        {
+                            Serial.println("MQTT: RPC subscribed");
+                        }
+                        else
+                        {
+                            Serial.println("MQTT: RPC subscription failed");
+                        }
+
+                        nextConnectTry = millis() + MQTT_RETRY_MS;
+                    }
+                    else
+                    {
+                        Serial.println("MQTT: Connection failed");
+                        nextConnectTry = millis() + MQTT_RETRY_MS;
                     }
                 }
             }
-            else {
+            else
+            {
+                // MQTT is connected: process incoming commands
                 MQTT_Driver_Loop();
 
-                // PEEK: the packet is removed only after the publish succeeded,
-                // so nothing is lost if the network drops in the middle.
-                if (xQueuePeek(sensorData_to_Transmeter, &dataToSend, 0) == pdPASS) {
+                // Read sensor data without removing it
+                if (xQueuePeek(sensorData_from_SPI, &dataToSend, 0) == pdPASS)
+                {
                     char jsonPayload[256];
-                    snprintf(jsonPayload, sizeof(jsonPayload), 
-                        "{\"packet_id\":%u, \"water_ph\":%.2f, \"turbidity\":%.2f, \"soil_moisture\":%.2f, \"soil_ph\":%.2f}", 
-                        dataToSend.packet_id, dataToSend.water_ph, dataToSend.turbidity, 
-                        dataToSend.soil_moisture, dataToSend.soil_ph
-                    );
 
-                    if (MQTT_Driver_Publish("v1/devices/me/telemetry", jsonPayload)) {
-                        xQueueReceive(sensorData_to_Transmeter, &dataToSend, 0);   // now remove it
+                    snprintf(jsonPayload, sizeof(jsonPayload),
+                        "{\"packet_id\":%u,\"water_ph\":%.2f,"
+                        "\"turbidity\":%.2f,\"soil_moisture\":%.2f,"
+                        "\"soil_ph\":%.2f}",
+                        dataToSend.packet_id,
+                        dataToSend.water_ph,
+                        dataToSend.turbidity,
+                        dataToSend.soil_moisture,
+                        dataToSend.soil_ph);
+
+                    Serial.printf("MQTT payload: %s\n", jsonPayload);
+
+                    if (MQTT_Driver_Publish(
+                            "v1/devices/me/telemetry", jsonPayload))
+                    {
+                        // Remove data only after successful publishing
+                        xQueueReceive(sensorData_from_SPI, &dataToSend, 0);
+
                         Serial.printf("Published SPI data via %s.\n",
-                                      bound == MQTT_TRANSPORT_WIFI ? "WiFi" : "4G");
-                    } else {
+                            bound == MQTT_TRANSPORT_WIFI ? "WiFi" : "4G");
+                    }
+                    else
+                    {
                         Serial.println("Publish failed, will retry.");
                     }
                 }
@@ -116,6 +184,9 @@ void MQTT_app(void *pvParameters) {
             giveIfNeeded(bound);
         }
 
-        vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(20));
+
     }
 }
+
+

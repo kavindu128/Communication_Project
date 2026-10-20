@@ -1,19 +1,17 @@
 #include "Queues.h"     
-#include "Sensor_Packet.h"
+#include "SPI_Packet.h"
 
-QueueHandle_t sensorData_to_Transmeter;   /* Board1 data → Transmeter task   */
- 
+QueueHandle_t sensorData_from_SPI;   /* Board1 data → Transmeter task   */
 
-#define QUEUE_LENGTH 100
-#define QUEUE_ITEM_SIZE sizeof(sensor_packet)
+QueueHandle_t networkStatus_to_SPI;       /* Network status → SPI task       */
+
 
 void Queue_Init()
 {
-    sensorData_to_Transmeter = xQueueCreate(QUEUE_LENGTH, QUEUE_ITEM_SIZE);
+    sensorData_from_SPI = xQueueCreate(100, sizeof(SensorPacket));
+    networkStatus_to_SPI = xQueueCreate(10, sizeof(NetworkStatusPacket));
     
-
-   
-    if (sensorData_to_Transmeter == NULL)
+    if (sensorData_from_SPI == NULL)
     {
         Serial.println("Failed to create sensor data queue");
     }

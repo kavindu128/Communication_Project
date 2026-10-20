@@ -1,5 +1,5 @@
 #include "LoRa_app.h"
-#include "Sensor_Packet.h"
+#include "SPI_Packet.h"
 
 TaskHandle_t LoRaAppHandle;
 
@@ -16,13 +16,13 @@ void LoRa_app(void* pvParameters)
 
     Serial.println("LoRa initialized successfully");
 
-     static sensor_packet packet;
+     static SensorPacket packet;
 
     while (1)
     {
         // Wait for SensorPacket from queue
         if (xQueueReceive(
-                sensorData_to_Transmeter,
+                sensorData_from_SPI,
                 &packet,
                 portMAX_DELAY))
         {
@@ -43,7 +43,7 @@ void LoRa_app(void* pvParameters)
             // Send SensorPacket through LoRa
             if (LoRa_send(
                     (const uint8_t *)&packet,
-                    sizeof(sensor_packet)))
+                    sizeof(SensorPacket)))
             {
                 Serial.printf(
                     "LoRa: Packet %d sent successfully\n",
