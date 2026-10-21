@@ -7,6 +7,7 @@
 
 #include "SPI_Slave_hal.h"
 #include "SPI_Packet.h"
+#include "Queues.h"
 
 bool SPI_Slave_Driver_Init(void);
 

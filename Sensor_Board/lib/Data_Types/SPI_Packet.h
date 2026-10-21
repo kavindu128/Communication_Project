@@ -9,7 +9,7 @@
 
 #define POLL_PACKET 0x00
 #define SENSOR_PACKET 0x01
-#define NETWORK_STATUS_PACKET 0x02A
+#define NETWORK_STATUS_PACKET 0x02
 
 typedef struct __attribute__((packed))
 {

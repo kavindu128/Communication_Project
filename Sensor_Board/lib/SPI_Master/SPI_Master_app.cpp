@@ -1,15 +1,15 @@
 #include "SPI_Master_app.h"   
 
-static bool SPI_Master_BuildFrame(
-    SPIFrame *frame,
-    uint8_t packet_type,
-    const void *payload,
-    uint8_t payload_length
-)
+
+static bool SPI_Master_BuildFrame( SPIFrame *frame, uint8_t packet_type, const void *payload, uint8_t payload_length)
 {
     if (frame == nullptr ||
-        payload == nullptr ||
         payload_length > SPI_PAYLOAD_SIZE)
+    {
+        return false;
+    }
+
+    if (payload_length > 0 && payload == nullptr)
     {
         return false;
     }
@@ -19,11 +19,14 @@ static bool SPI_Master_BuildFrame(
     frame->data[0] = packet_type;
     frame->data[1] = payload_length;
 
-    memcpy(
-        &frame->data[SPI_HEADER_SIZE],
-        payload,
-        payload_length
-    );
+    if (payload_length > 0)
+    {
+        memcpy(
+            &frame->data[SPI_HEADER_SIZE],
+            payload,
+            payload_length
+        );
+    }
 
     return true;
 }
@@ -45,6 +48,9 @@ static bool SPI_Master_ValidateFrame(const SPIFrame *frame)
 
     switch (type)
     {
+        case POLL_PACKET:
+            return length ==0;
+
         case SENSOR_PACKET:
             return length == sizeof(SensorPacket);
 
@@ -91,109 +97,81 @@ void SPI_Master_app(void *pvParameters)
     size_t index = 0;
     size_t packetCount = sizeof(sensorPackets) / sizeof(sensorPackets[0]);
 
-     while (1)
-    {
-        while (1)
-    {
-        // 1. Generate/select dummy sensor data
-        sensor = sensorPackets[index];
+    // Trackers for the 1-minute interval
+    TickType_t lastSensorTime = 0;
+    const TickType_t sensorInterval = pdMS_TO_TICKS(60000); // 1 minute (60,000 ms)
+    bool isFirstRun = true;
 
-        // 2. Put generated sensor data into Queue 1
-        if (xQueueSend(sensorData_to_SPI, &sensor, 0) == pdTRUE)
+    while (1)
+    {
+        TickType_t currentTime = xTaskGetTickCount();
+        bool isSendingSensorData = false;
+
+        // 1. Check if 1 minute has passed OR if this is the very first loop iteration
+        if (isFirstRun || (currentTime - lastSensorTime) >= sensorInterval)
         {
-            Serial.printf(
-                "\nGenerated sensor packet ID: %u\n",
-                sensor.packet_id);
+            // Time to send the sensor data
+            sensor = sensorPackets[index];
+            SPI_Master_BuildFrame(&txFrame, SENSOR_PACKET, &sensor, sizeof(SensorPacket));
+            
+            isSendingSensorData = true;
+            lastSensorTime = currentTime; // Reset the 1-minute stopwatch
+            isFirstRun = false;
+            
+            // Advance to next dummy sensor packet for the next minute
+            index = (index + 1) % packetCount;
         }
         else
         {
-            Serial.println("Sensor queue is full");
+            // Not time for sensor data yet. Build a dummy POLL_PACKET instead.
+            SPI_Master_BuildFrame(&txFrame, POLL_PACKET, nullptr, 0);
         }
 
-        // 3. Read sensor data from Queue 1 for SPI transmission
-        if (xQueueReceive(sensorData_to_SPI, &sensor, 0) == pdTRUE)
+        // 2. Send the chosen frame and receive from the slave
+        if (SPI_Master_Transfer(txFrame.data, rxFrame.data, SPI_FRAME_SIZE))
         {
-            // Build the outgoing sensor frame
-            if (SPI_Master_BuildFrame(
-                    &txFrame,
-                    SENSOR_PACKET,
-                    &sensor,
-                    sizeof(SensorPacket)))
+            if (isSendingSensorData) {
+                Serial.printf("\n[1-MINUTE TICK] Sensor packet %u sent through SPI\n", sensor.packet_id);
+            }
+
+            // 3. Validate the frame received from the slave
+            if (SPI_Master_ValidateFrame(&rxFrame))
             {
-                // 4. Send sensor frame and simultaneously receive
-                // the frame returned by the SPI slave
-                if (SPI_Master_Transfer(
-                        txFrame.data,
-                        rxFrame.data,
-                        SPI_FRAME_SIZE))
+                // Check if the slave returned network status
+                if (rxFrame.data[0] == NETWORK_STATUS_PACKET &&
+                    rxFrame.data[1] == sizeof(NetworkStatusPacket))
                 {
-                    Serial.printf(
-                        "Sensor packet %u sent through SPI\n",
-                        sensor.packet_id);
+                    memcpy(&networkStatus, &rxFrame.data[SPI_HEADER_SIZE], sizeof(NetworkStatusPacket));
 
-                    // 5. Validate the frame received from the slave
-                    if (SPI_Master_ValidateFrame(&rxFrame) &&
-                        rxFrame.data[0] == NETWORK_STATUS_PACKET &&
-                        rxFrame.data[1] == sizeof(NetworkStatusPacket))
+                    // 4. Put received status into Queue
+                    if (xQueueSend(networkStatus_from_SPI, &networkStatus, 0) != pdTRUE)
                     {
-                        // Decode the network status payload
-                        memcpy(
-                            &networkStatus,
-                            &rxFrame.data[SPI_HEADER_SIZE],
-                            sizeof(NetworkStatusPacket));
-
-                        // 6. Put received status into Queue 2
-                        if (xQueueSend(
-                                networkStatus_from_SPI,
-                                &networkStatus,
-                                0) != pdTRUE)
-                        {
-                            Serial.println(
-                                "Network status queue is full");
-                        }
+                        Serial.println("Network status queue is full");
                     }
-                    else
-                    {
-                        Serial.println(
-                            "Invalid network status received from slave");
-                    }
-                }
-                else
-                {
-                    Serial.println("SPI transfer failed");
                 }
             }
         }
+        else
+        {
+            Serial.println("SPI transfer failed");
+        }
 
         // 7. Read ONLY network status from Queue 2 and print it
-        while (xQueueReceive(
-                   networkStatus_from_SPI,
-                   &networkStatus,
-                   0) == pdTRUE)
+       while (xQueueReceive(networkStatus_from_SPI, &networkStatus, 0) == pdTRUE)
         {
+            // Optional: You might want to comment out these print statements if they 
+            // spam the serial monitor too heavily during continuous polling.
             Serial.println("\n--- Network Status from SPI Slave ---");
-
-            Serial.printf(
-                "Connected: %s\n",
-                networkStatus.connected ? "YES" : "NO");
-
-            Serial.printf(
-                "Signal strength: %d dBm\n",
-                networkStatus.signal_strength);
-
-            Serial.printf(
-                "Connection state: %u\n",
-                networkStatus.connection_state);
-
+            Serial.printf("Connected: %s\n", networkStatus.connected ? "YES" : "NO");
+            Serial.printf("Signal strength: %d dBm\n", networkStatus.signal_strength);
+            Serial.printf("Connection state: %u\n", networkStatus.connection_state);
             Serial.println("-------------------------------------");
         }
 
-        // 8. Select the next dummy sensor packet
-        index = (index + 1) % packetCount;
-
-        // Repeat every second
-        vTaskDelay(pdMS_TO_TICKS(60000));
+        // 6. Yield to FreeRTOS scheduler to prevent Watchdog crashes
+        // This dictates the fast polling speed. 100ms = 10 polls per second.
+        vTaskDelay(pdMS_TO_TICKS(1000)); 
     }
 
-    }
 }
+

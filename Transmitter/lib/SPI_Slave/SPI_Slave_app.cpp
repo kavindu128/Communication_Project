@@ -1,17 +1,20 @@
+
 #include "SPI_Slave_app.h"
-#include "SPI_Packet.h"
-#include "Queues.h"
 
 TaskHandle_t SPIAppHandle;
 
-bool SPI_BuildFrame(SPIFrame *frame, uint8_t packet_type, const void *payload, uint8_t payload_length)
+bool SPI_BuildFrame(
+    SPIFrame *frame,
+    uint8_t packet_type,
+    const void *payload,
+    uint8_t payload_length)
 {
-    if (frame == nullptr || payload == nullptr)
+    if (frame == nullptr || payload_length > SPI_PAYLOAD_SIZE)
     {
         return false;
     }
 
-    if (payload_length > SPI_PAYLOAD_SIZE)
+    if (payload_length > 0 && payload == nullptr)
     {
         return false;
     }
@@ -21,11 +24,14 @@ bool SPI_BuildFrame(SPIFrame *frame, uint8_t packet_type, const void *payload, u
     frame->data[0] = packet_type;
     frame->data[1] = payload_length;
 
-    memcpy(
-        &frame->data[SPI_HEADER_SIZE],
-        payload,
-        payload_length
-    );
+    if (payload_length > 0)
+    {
+        memcpy(
+            &frame->data[SPI_HEADER_SIZE],
+            payload,
+            payload_length
+        );
+    }
 
     return true;
 }
@@ -45,14 +51,16 @@ bool SPI_ValidateFrame(const SPIFrame *frame)
         return false;
     }
 
-    // Check that the packet type is recognized.
     switch (packet_type)
     {
+        case POLL_PACKET:
+            return payload_length == 0;
+
         case SENSOR_PACKET:
+            return payload_length == sizeof(SensorPacket);
+
         case NETWORK_STATUS_PACKET:
-        //case PACKET_CONTROL:
-        //case PACKET_DIAGNOSTIC:
-            return true;
+            return payload_length == sizeof(NetworkStatusPacket);
 
         default:
             return false;
@@ -65,38 +73,55 @@ void SPI_Slave_app(void *pvParameters)
     {
         Serial.println("SPI Slave initialization failed");
         vTaskDelete(NULL);
+        return;
     }
- 
+
     Serial.println("SPI Slave initialized successfully");
- 
+
     SPIFrame txFrame = {};
     SPIFrame rxFrame = {};
 
-    // Default status until an actual status is received from the queue.
-    NetworkStatusPacket NetworkStatus = {};
-    NetworkStatus.connected = 0;
-    NetworkStatus.signal_strength = -127;
-    NetworkStatus.connection_state = 0;
+    NetworkStatusPacket networkStatus = {};
+    networkStatus.connected = 0;
+    networkStatus.signal_strength = -127;
+    networkStatus.connection_state = 0;
 
- 
+    // Duplicate-packet protection.
+    uint32_t lastPacketId = 0;
+    bool hasReceivedPacket = false;
+
     while (1)
     {
+        // Update the latest network status from its queue.
         NetworkStatusPacket newNetworkStatus;
 
-        if (xQueueReceive(networkStatus_to_SPI, &newNetworkStatus, 0) == pdTRUE)
+        if (xQueueReceive(
+                networkStatus_to_SPI,
+                &newNetworkStatus,
+                0) == pdTRUE)
         {
-            NetworkStatus = newNetworkStatus;
+            networkStatus = newNetworkStatus;
         }
 
-        // Prepare status before the master starts the transaction.
-        if (!SPI_BuildFrame(&txFrame, NETWORK_STATUS_PACKET, &NetworkStatus,sizeof(NetworkStatus)))
+        // Prepare the slave's outgoing network status.
+        if (!SPI_BuildFrame(
+                &txFrame,
+                NETWORK_STATUS_PACKET,
+                &networkStatus,
+                sizeof(NetworkStatusPacket)))
         {
-            Serial.println("Failed to build Networkstatus frame");
+            Serial.println("Failed to build network status frame");
+            vTaskDelay(1);
             continue;
         }
 
-        bool result = SPI_Slave_Transfer(txFrame.data, rxFrame.data, SPI_FRAME_SIZE);
- 
+        // Exchange one fixed-size SPI frame.
+        bool result = SPI_Slave_Transfer(
+            txFrame.data,
+            rxFrame.data,
+            SPI_FRAME_SIZE
+        );
+
         if (!result)
         {
             Serial.println("SPI transfer failed");
@@ -105,41 +130,67 @@ void SPI_Slave_app(void *pvParameters)
 
         if (!SPI_ValidateFrame(&rxFrame))
         {
-            Serial.println("Received invalid frame");
+            Serial.printf(
+                "Invalid SPI frame: type=%u, length=%u\n",
+                rxFrame.data[0],
+                rxFrame.data[1]
+            );
             continue;
         }
 
-        switch (rxFrame.data[0])
+        uint8_t packetType = rxFrame.data[0];
+
+        switch (packetType)
         {
+            case POLL_PACKET:
+            {
+                // Poll is not sensor data.
+                // Do not enqueue or publish sensor data.
+                break;
+            }
+
             case SENSOR_PACKET:
             {
-                if (rxFrame.data[1] != sizeof(SensorPacket))
-                {
-                    Serial.println("Invalid sensor payload length");
-                    break;
-                }
-
-                SensorPacket receivedPacket;
+                SensorPacket receivedPacket = {};
 
                 memcpy(
                     &receivedPacket,
                     &rxFrame.data[SPI_HEADER_SIZE],
-                    sizeof(receivedPacket)
+                    sizeof(SensorPacket)
                 );
 
+                // Ignore a repeated packet ID.
+                if (hasReceivedPacket &&
+                    receivedPacket.packet_id == lastPacketId)
+                {
+                    Serial.printf(
+                        "Duplicate sensor packet ignored: ID=%lu\n",
+                        (unsigned long)receivedPacket.packet_id
+                    );
+                    break;
+                }
+
+                lastPacketId = receivedPacket.packet_id;
+                hasReceivedPacket = true;
+
                 Serial.printf(
-                    "Sensor data received | "
+                    "New sensor packet ID: %lu | "
                     "Water pH: %.2f | "
                     "Turbidity: %.2f | "
                     "Soil Moisture: %.2f | "
                     "Soil pH: %.2f\n",
+                    (unsigned long)receivedPacket.packet_id,
                     receivedPacket.water_ph,
                     receivedPacket.turbidity,
                     receivedPacket.soil_moisture,
                     receivedPacket.soil_ph
                 );
 
-                if (xQueueSend(sensorData_from_SPI, &receivedPacket,0) != pdTRUE)
+                // Forward new sensor data to the Wi-Fi application.
+                if (xQueueSend(
+                        sensorData_from_SPI,
+                        &receivedPacket,
+                        0) != pdTRUE)
                 {
                     Serial.println("Sensor queue is full");
                 }
@@ -148,12 +199,13 @@ void SPI_Slave_app(void *pvParameters)
             }
 
             default:
+            {
                 Serial.printf(
-                    "Unexpected packet type from master: 0x%02X\n",
-                    rxFrame.data[0]
+                    "Unexpected packet type: 0x%02X\n",
+                    packetType
                 );
                 break;
+            }
         }
-        
     }
 }

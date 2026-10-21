@@ -1,0 +1,1 @@
+#include "SIM7080_hal.h"
