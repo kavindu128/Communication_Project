@@ -1,30 +1,22 @@
 #include "SIM7600_driver.h"
 #include "SIM7600_hal.h"
 
-
-// #define TINY_GSM_DEBUG Serial       
-#define TINY_GSM_MODEM_SIM7600
-#include <TinyGsmClient.h>
- 
 // Initialize the modem using the Serial2 interface provided by the HAL
 static TinyGsm modem(SimSerial);
 static TinyGsmClient cellularClient(modem);
 static volatile bool gprs_is_connected = false;   // cached: read by other tasks without AT commands
  
-SemaphoreHandle_t ModemMutex = NULL;
+SemaphoreHandle_t Sim7600ModemMutex = NULL;
  
 void SIM7600_Driver_Init() {
-    if (ModemMutex == NULL) {                  // normally already created in SIM7600_app_init()
-        ModemMutex = xSemaphoreCreateMutex();
-    }
     gprs_is_connected = false;                 // modem is (re)starting: no link yet
     SIM7600_HAL_Init();
  
     //Serial.println("Initializing TinyGSM modem...");
     // modem.restart() automatically sends "AT", "ATI", and checks basic responses
-    if (xSemaphoreTake(ModemMutex, portMAX_DELAY) == pdTRUE) {
+    if (xSemaphoreTake(Sim7600ModemMutex, portMAX_DELAY) == pdTRUE) {
         modem.restart();
-        xSemaphoreGive(ModemMutex);
+        xSemaphoreGive(Sim7600ModemMutex);
     }
 }
  

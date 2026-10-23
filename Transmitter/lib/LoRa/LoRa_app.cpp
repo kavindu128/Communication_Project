@@ -1,31 +1,48 @@
 #include "LoRa_app.h"
 #include "SPI_Packet.h"
+#include "NetworkManager_app.h"
 
 TaskHandle_t LoRaAppHandle;
+volatile bool LoRa_IsReady = false;
 
 void LoRa_app(void* pvParameters)
 {
-    Serial.println("LoRa Transmitter Starting...");
+     Serial.println("LoRa Transmitter Starting...");
 
     if (!LoRa_init(433E6))
     {
+        LoRa_IsReady = false;
         Serial.println("LoRa initialization failed");
         vTaskDelete(NULL);
         return;
     }
 
+    LoRa_IsReady = true;
     Serial.println("LoRa initialized successfully");
 
      static SensorPacket packet;
 
     while (1)
     {
-        // Wait for SensorPacket from queue
+        // Do not consume the shared sensor queue unless LoRa is the selected route.
+        if (!NetworkManager_IsRouteSelected(NETWORK_LORA))
+        {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+
+        // Short wait lets the task notice a route change promptly.
         if (xQueueReceive(
                 sensorData_from_SPI,
                 &packet,
-                portMAX_DELAY))
-        {
+                pdMS_TO_TICKS(100)))
+        { 
+            if (!NetworkManager_IsRouteSelected(NETWORK_LORA))
+            {
+                // Route changed while waiting; keep the packet for the selected sender.
+                xQueueSendToFront(sensorData_from_SPI, &packet, 0);
+                continue;
+            }
             Serial.printf(
                 "Packet Received from Queue to LoRa: Packet %d | "
                 "Water pH: %.1f | "
@@ -52,13 +69,16 @@ void LoRa_app(void* pvParameters)
             }
             else
             {
+                // Keep the packet for the next active route/retry.
+                xQueueSendToFront(sensorData_from_SPI, &packet, 0);
                 Serial.printf(
-                    "LoRa: Packet %d send failed\n",
+                    "LoRa: Packet %d send failed; packet retained\n",
                     packet.packet_id
                 );
             }
         }
         
     }
+
 }
 

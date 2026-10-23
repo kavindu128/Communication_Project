@@ -4,9 +4,10 @@
 #include "WIFI_app.h"
 #include "LoRa_app.h"
 #include "SIM7600_app.h"
+#include "SIM7080_app.h"
 #include "WIFI_app.h"
 #include "MQTT_app.h"
-#include "test_app.h"
+#include "NetworkManager_app.h"
 
 
 
@@ -17,11 +18,13 @@ void setup()
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     Queue_Init();
-    SIM7600_app_init();
+    SIM7600_app_Init();
     WIFI_app_init();
+    SIM7080_app_Init();
 
-    xTaskCreatePinnedToCore(Test_app, "Test_app", 4096, NULL, 1, &TestHandle,1);
-    
+    xTaskCreatePinnedToCore(NetworkManager_app, "NetworkManager_app", 4096, NULL, 1, &NetworkManagerAppHandle,1);
+
+    xTaskCreatePinnedToCore(SIM7080_app, "SIM7080_app",4096,NULL,1, &SIM7080AppHandle,1);
 
     xTaskCreatePinnedToCore(SIM7600_app, "SIM7600_app", 4096, NULL, 1, &SIM7600AppHandle, 1);
 
@@ -31,9 +34,7 @@ void setup()
 
     xTaskCreatePinnedToCore(SPI_Slave_app, "SPI App", 4096, NULL, 3, &SPIAppHandle,1); // xTaskCreatePinnedToCore
 
-    
-
-    //xTaskCreatePinnedToCore(LoRa_app, "LoRa Task", 4096, NULL, 2, &LoRaAppHandle,1);
+    xTaskCreatePinnedToCore(LoRa_app, "LoRa Task", 4096, NULL, 2, &LoRaAppHandle,1);
 
     
 }

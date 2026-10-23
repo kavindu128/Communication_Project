@@ -1,75 +1,88 @@
 #include "MQTT_app.h"
+#include "NetworkManager_app.h"
                   
 TaskHandle_t MQTTAppHandle;
 
 #define MQTT_RETRY_MS          3000    // wait between failed broker connects
 #define MQTT_WIFI_TIMEOUT_S    5
-#define MQTT_SIM_TIMEOUT_S     30
+#define MQTT_CELL_TIMEOUT_S    30
 
-// Only the 4G client talks AT commands over the UART. WiFi MQTT is a plain
-// TCP stream, so it must never wait for (or block) the ModemMutex.
-static const char* transportName(MQTT_Transport t) {
-    return t == MQTT_TRANSPORT_WIFI ? "WiFi" : (t == MQTT_TRANSPORT_SIM ? "4G" : "NONE");
-}
+volatile MQTT_Transport MQTT_App_BoundTransport = MQTT_TRANSPORT_NONE;
+volatile bool MQTT_App_Connected = false;
 
-static inline bool needsModemMutex(MQTT_Transport t) {
-    return t == MQTT_TRANSPORT_SIM;
-}
-
-static bool takeIfNeeded(MQTT_Transport t, TickType_t wait) {
-    if (!needsModemMutex(t)) return true;
-    if (ModemMutex == NULL) return false;
-    return xSemaphoreTake(ModemMutex, wait) == pdTRUE;
-}
-
-static void giveIfNeeded(MQTT_Transport t) {
-    if (needsModemMutex(t)) xSemaphoreGive(ModemMutex);
-}
-
-// Close the old session cleanly (if the old network still exists)
-static void teardown(MQTT_Transport old) {
-    if (old == MQTT_TRANSPORT_WIFI) {
-        MQTT_Driver_Disconnect();                       // no UART involved
-    }
-    else if (old == MQTT_TRANSPORT_SIM) {
-        // If the modem is already gone, SIM7600_Driver_PowerOff() closed the socket.
-        // Do not send AT commands to a modem that is off or restarting.
-        if (SIM7600_State == SIM7600_CONNECTED && takeIfNeeded(old, pdMS_TO_TICKS(5000))) {
-            MQTT_Driver_Disconnect();
-            giveIfNeeded(old);
-        }
+static const char* transportName(MQTT_Transport t)
+{
+    switch (t)
+    {
+        case MQTT_TRANSPORT_WIFI: return "WiFi";
+        case MQTT_TRANSPORT_SIM7080: return "SIM7080";
+        case MQTT_TRANSPORT_SIM7600: return "SIM7600";
+        default: return "NONE";
     }
 }
+
+static SemaphoreHandle_t transportMutex(MQTT_Transport t)
+{
+    if (t == MQTT_TRANSPORT_SIM7080) return Sim7080ModemMutex;
+    if (t == MQTT_TRANSPORT_SIM7600) return Sim7600ModemMutex;
+    return nullptr;
+}
+
+static bool takeTransport(MQTT_Transport t, TickType_t wait)
+{
+    SemaphoreHandle_t mutex = transportMutex(t);
+    return mutex == nullptr || xSemaphoreTake(mutex, wait) == pdTRUE;
+}
+
+static void giveTransport(MQTT_Transport t)
+{
+    SemaphoreHandle_t mutex = transportMutex(t);
+    if (mutex != nullptr) xSemaphoreGive(mutex);
+}
+
+static void closeBoundTransport(MQTT_Transport old)
+{
+    if (old == MQTT_TRANSPORT_NONE) return;
+
+    if (old == MQTT_TRANSPORT_WIFI)
+    {
+        MQTT_Driver_Disconnect();
+        return;
+    }
+
+    // Don't send AT commands if the modem is no longer connected/ready.
+    bool ready = (old == MQTT_TRANSPORT_SIM7080)
+        ? (SIM7080_State == SIM7080_CONNECTED)
+        : (SIM7600_State == SIM7600_CONNECTED);
+
+    if (ready && takeTransport(old, pdMS_TO_TICKS(3000)))
+    {
+        MQTT_Driver_Disconnect();
+        giveTransport(old);
+    }
+}
+
+
 
 void MQTT_App_ProcessCommand(const char* method, bool state)
 {
     if (strcmp(method, "SIM7600") == 0)
+        NetworkManager_HandleCommand(NETWORK_SIM7600, state);
+    else if (strcmp(method, "SIM7080") == 0)
+        NetworkManager_HandleCommand(NETWORK_SIM7080, state);
+    else if (strcmp(method, "WIFI") == 0)
+        NetworkManager_HandleCommand(NETWORK_WIFI, state);
+    else if (strcmp(method, "LORA") == 0)
+        NetworkManager_HandleCommand(NETWORK_LORA, state);
+    else
     {
-        if (state)
-        {
-            xSemaphoreGive(SIM7600_ON_FLAG);
-            Serial.println("SIM7600 ON command received");
-        }
-        else
-        {
-            xSemaphoreGive(SIM7600_OFF_FLAG);
-            Serial.println("SIM7600 OFF command received");
-        }
+        Serial.printf("Unknown MQTT RPC method: %s\n", method);
+        return;
     }
 
-    else if (strcmp(method, "WIFI") == 0)
-    {
-        if (state)
-        {
-            xSemaphoreGive(WIFI_ON_FLAG);
-            Serial.println("WIFI ON command received");
-        }
-        else 
-        {
-            xSemaphoreGive(WIFI_OFF_FLAG);
-            Serial.println("WIFI OFF command received");
-        }
-    }
+    Serial.printf("MQTT RPC: %s %s command handled by Network Manager\n",
+                  method, state ? "ON" : "OFF");
+
 }
 
 void MQTT_app(void *pvParameters) {
@@ -81,112 +94,104 @@ void MQTT_app(void *pvParameters) {
     MQTT_Transport bound = MQTT_TRANSPORT_NONE;   // network the MQTT session is attached to
     uint32_t nextConnectTry = 0;
 
-    for (;;) {
+    for (;;)
+    {
+        // This returns only the route explicitly selected in Network Manager.
+        MQTT_Transport wanted = MQTT_HAL_GetBestTransport();
 
-        // 1. Which network should we be on right now?
-        MQTT_Transport want = MQTT_HAL_GetBestTransport();
-
-        // 2. Network changed (WiFi up/down, 4G up/down): move the session
-        if (want != bound) {
-            Serial.printf("MQTT: %s -> %s\n", transportName(bound), transportName(want));
-
-            if (bound != MQTT_TRANSPORT_NONE) {
-                teardown(bound);
-            }
-
-            bound = want;
-            if (bound != MQTT_TRANSPORT_NONE) {
-                MQTT_Driver_BindClient(MQTT_HAL_GetClient(bound),
-                                       bound == MQTT_TRANSPORT_WIFI ? MQTT_WIFI_TIMEOUT_S
-                                                                    : MQTT_SIM_TIMEOUT_S);
-            } else {
-                MQTT_Driver_BindClient(nullptr, 0);
-            }
-            nextConnectTry = millis();                // connect to the new network immediately
-        }
-
-        // 3. No network at all: sensor packets simply stay in the queue
-        if (bound == MQTT_TRANSPORT_NONE) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            continue;
-        }
-
-        // 4. Work on the active network (mutex only if it is the 4G modem)
-        if (takeIfNeeded(bound, pdMS_TO_TICKS(5000)))
+        if (wanted != bound)
         {
-            if (!MQTT_Driver_IsConnected())
+            Serial.printf("MQTT route: %s -> %s\n",transportName(bound), transportName(wanted));
+
+            closeBoundTransport(bound);
+            bound = wanted;
+            MQTT_App_BoundTransport = bound;
+            MQTT_App_Connected = false;
+
+            if (bound != MQTT_TRANSPORT_NONE)
             {
-                // Connect only when disconnected
-                if ((int32_t)(millis() - nextConnectTry) >= 0)
-                {
-                    Serial.println("MQTT: Trying to connect...");
-
-                    if (MQTT_Driver_Connect())
-                    {
-                        Serial.println("MQTT: Connected");
-
-                        if (MQTT_Driver_SubscribeCommands())
-                        {
-                            Serial.println("MQTT: RPC subscribed");
-                        }
-                        else
-                        {
-                            Serial.println("MQTT: RPC subscription failed");
-                        }
-
-                        nextConnectTry = millis() + MQTT_RETRY_MS;
-                    }
-                    else
-                    {
-                        Serial.println("MQTT: Connection failed");
-                        nextConnectTry = millis() + MQTT_RETRY_MS;
-                    }
-                }
+                uint16_t timeout = (bound == MQTT_TRANSPORT_WIFI)
+                    ? MQTT_WIFI_TIMEOUT_S : MQTT_CELL_TIMEOUT_S;
+                MQTT_Driver_BindClient(MQTT_HAL_GetClient(bound), timeout);
             }
             else
             {
-                // MQTT is connected: process incoming commands
-                MQTT_Driver_Loop();
-
-                // Read sensor data without removing it
-                if (xQueuePeek(sensorData_from_SPI, &dataToSend, 0) == pdPASS)
-                {
-                    char jsonPayload[256];
-
-                    snprintf(jsonPayload, sizeof(jsonPayload),
-                        "{\"packet_id\":%u,\"water_ph\":%.2f,"
-                        "\"turbidity\":%.2f,\"soil_moisture\":%.2f,"
-                        "\"soil_ph\":%.2f}",
-                        dataToSend.packet_id,
-                        dataToSend.water_ph,
-                        dataToSend.turbidity,
-                        dataToSend.soil_moisture,
-                        dataToSend.soil_ph);
-
-                    Serial.printf("MQTT payload: %s\n", jsonPayload);
-
-                    if (MQTT_Driver_Publish(
-                            "v1/devices/me/telemetry", jsonPayload))
-                    {
-                        // Remove data only after successful publishing
-                        xQueueReceive(sensorData_from_SPI, &dataToSend, 0);
-
-                        Serial.printf("Published SPI data via %s.\n",
-                            bound == MQTT_TRANSPORT_WIFI ? "WiFi" : "4G");
-                    }
-                    else
-                    {
-                        Serial.println("Publish failed, will retry.");
-                    }
-                }
+                MQTT_Driver_Disconnect();
+                MQTT_Driver_BindClient(nullptr, 0);
+                MQTT_App_Connected = false;
             }
 
-            giveIfNeeded(bound);
+            nextConnectTry = millis();
         }
 
-    vTaskDelay(pdMS_TO_TICKS(20));
+        if (bound == MQTT_TRANSPORT_NONE)
+        {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
 
+        if (!takeTransport(bound, pdMS_TO_TICKS(1000)))
+        {
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+
+        if (!MQTT_Driver_IsConnected())
+        {
+            if ((int32_t)(millis() - nextConnectTry) >= 0)
+            {
+                MQTT_App_Connected = false;
+                Serial.printf("MQTT: connecting over %s...\n", transportName(bound));
+                if (MQTT_Driver_Connect())
+                {
+                    Serial.println("MQTT connected");
+                    MQTT_App_Connected = true;
+                    if (MQTT_Driver_SubscribeCommands())
+                        Serial.println("MQTT RPC subscribed");
+                    else
+                        Serial.println("MQTT RPC subscription failed");
+                }
+                else
+                {
+                    Serial.println("MQTT connection failed");
+                }
+                nextConnectTry = millis() + MQTT_RETRY_MS;
+            }
+        }
+        else
+        {
+            MQTT_Driver_Loop();
+
+            // Peek first; remove from queue only after successful publish.
+            if (xQueuePeek(sensorData_from_SPI, &dataToSend, 0) == pdPASS)
+            {
+                char payload[256];
+                snprintf(payload, sizeof(payload),
+                    "{\"packet_id\":%u,\"water_ph\":%.2f,"
+                    "\"turbidity\":%.2f,\"soil_moisture\":%.2f,"
+                    "\"soil_ph\":%.2f}",
+                    (unsigned)dataToSend.packet_id,
+                    dataToSend.water_ph,
+                    dataToSend.turbidity,
+                    dataToSend.soil_moisture,
+                    dataToSend.soil_ph);
+
+                if (MQTT_Driver_Publish("v1/devices/me/telemetry", payload))
+                {
+                    xQueueReceive(sensorData_from_SPI, &dataToSend, 0);
+                    Serial.printf("Sensor packet published through %s\n", transportName(bound));
+                }
+                else
+                {
+                    Serial.println("MQTT publish failed; packet retained for retry");
+                }
+            }
+        }
+
+        giveTransport(bound);
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
+
 
 

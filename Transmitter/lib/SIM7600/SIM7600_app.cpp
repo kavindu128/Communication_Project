@@ -11,12 +11,12 @@ const char* APN = "mobitel";
 
 uint8_t SIM7600_State = SIM7600_IDLE;
 
-void SIM7600_app_init() {
+void SIM7600_app_Init() {
     SIM7600_ON_FLAG = xSemaphoreCreateBinary();
     SIM7600_OFF_FLAG = xSemaphoreCreateBinary();
     SIM7600_CONNECTED_FLAG = xSemaphoreCreateBinary();
-    if (ModemMutex == NULL) {
-        ModemMutex = xSemaphoreCreateMutex();   // exists from boot, never NULL for other tasks
+    if (Sim7600ModemMutex == NULL) {
+        Sim7600ModemMutex = xSemaphoreCreateMutex();   // exists from boot, never NULL for other tasks
     }
 }
 
@@ -48,9 +48,9 @@ void SIM7600_app(void * pvParameters) {
                     break;
                 }
 
-                if (xSemaphoreTake(ModemMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
+                if (xSemaphoreTake(Sim7600ModemMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
                     bool ok = SIM7600_Driver_ConnectGPRS(APN);
-                    xSemaphoreGive(ModemMutex);
+                    xSemaphoreGive(Sim7600ModemMutex);
 
                     if (ok) {
                         Serial.println("GPRS connected successfully.");
@@ -71,9 +71,9 @@ void SIM7600_app(void * pvParameters) {
                 }
                 else {
                     // Still online?
-                    if (xSemaphoreTake(ModemMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
+                    if (xSemaphoreTake(Sim7600ModemMutex, pdMS_TO_TICKS(5000)) == pdTRUE) {
                         bool linkOk = SIM7600_Driver_IsConnected();
-                        xSemaphoreGive(ModemMutex);
+                        xSemaphoreGive(Sim7600ModemMutex);
 
                         if (linkOk) {
                             xSemaphoreGive(SIM7600_CONNECTED_FLAG);   // other tasks use this to know we are online
@@ -89,9 +89,9 @@ void SIM7600_app(void * pvParameters) {
 
             case SIM7600_OFF:
                 Serial.println("SIM: OFF");
-                if (xSemaphoreTake(ModemMutex, portMAX_DELAY) == pdTRUE) {
+                if (xSemaphoreTake(Sim7600ModemMutex, portMAX_DELAY) == pdTRUE) {
                     SIM7600_Driver_PowerOff();
-                    xSemaphoreGive(ModemMutex);
+                    xSemaphoreGive(Sim7600ModemMutex);
                 }
                 xSemaphoreTake(SIM7600_ON_FLAG, 0);        // forget an ON that was given while running
                 Serial.println("SIM: IDLE");

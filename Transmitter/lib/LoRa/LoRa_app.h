@@ -5,6 +5,7 @@
 #include "Queues.h"
 
 extern TaskHandle_t LoRaAppHandle;
+extern volatile bool LoRa_IsReady;
 
 void LoRa_app(void* pvParameters);
 

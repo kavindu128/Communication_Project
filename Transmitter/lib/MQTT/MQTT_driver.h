@@ -8,11 +8,6 @@
 #include "Queues.h"
 #include "SPI_Packet.h"
 #include "WIFI_driver.h"
-#include "SIM7600_driver.h"
-//#include "WIFI_hal.h"
-#include "SIM7600_app.h"
-#include "WIFI_app.h"
-#include "MQTT_app.h"
 
 
 void MQTT_Driver_Init();                                          // broker settings only, no network needed
