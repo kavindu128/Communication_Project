@@ -7,8 +7,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 
-extern QueueHandle_t sensorData_from_SPI;   /* Board1 data → Transmeter task   */
-extern QueueHandle_t networkStatus_to_SPI;       /* Network status → SPI task       */
+extern QueueHandle_t sensorData_from_SPI;  /* Board1 data → Transmeter task   */
+extern QueueHandle_t networkStatus_to_SPI; /* Network status → SPI task       */
 
 // Initialize queues
 void Queue_Init();

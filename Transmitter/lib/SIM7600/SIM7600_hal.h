@@ -8,7 +8,7 @@
 #define SIM7600_PWRKEY 15
 #define SIM7600_BAUD_RATE 115200
 
-extern HardwareSerial& SimSerial;
+extern HardwareSerial &SimSerial;
 
 void SIM7600_HAL_Init();
 

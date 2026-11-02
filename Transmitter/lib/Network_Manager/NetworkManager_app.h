@@ -23,5 +23,4 @@ bool NetworkManager_IsRouteSelected(NetworkRoute route);
 bool NetworkManager_IsRouteSelected(NetworkRoute route);
 void NetworkManager_HandleCommand(NetworkRoute route, bool state);
 
-
 #endif

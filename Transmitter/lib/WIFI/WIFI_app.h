@@ -5,11 +5,11 @@
 
 extern TaskHandle_t WiFiAppHandle;
 
-#define WIFI_STATE_IDLE        0
-#define WIFI_STATE_OFF         1
-#define WIFI_STATE_STARTING    2
-#define WIFI_STATE_CONNECTING  3
-#define WIFI_STATE_CONNECTED   4
+#define WIFI_STATE_IDLE 0
+#define WIFI_STATE_OFF 1
+#define WIFI_STATE_STARTING 2
+#define WIFI_STATE_CONNECTING 3
+#define WIFI_STATE_CONNECTED 4
 
 extern SemaphoreHandle_t WIFI_ON_FLAG;
 extern SemaphoreHandle_t WIFI_OFF_FLAG;

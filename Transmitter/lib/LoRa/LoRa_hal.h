@@ -1,13 +1,13 @@
 #ifndef LORA_HAL_H
 #define LORA_HAL_H
 
-#define LORA_SCK 8
-#define LORA_MISO 7
-#define LORA_MOSI 6
+#include <Arduino.h>
 
-#define LORA_SS 9
-#define LORA_RST 3
-#define LORA_DIO0 2
+#define LORA_RX 42
+#define LORA_TX 43
+#define LORA_RST 6
+
+#define LORA_BAUDRATE 115200
+#define LORA_FREQ    433000000UL
 
 #endif // LORA_HAL_H
-

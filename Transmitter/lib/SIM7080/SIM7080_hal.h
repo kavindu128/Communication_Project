@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-extern HardwareSerial& Sim7080Serial;
+extern HardwareSerial &Sim7080Serial;
 
 #define SIM7080_RX 4
 #define SIM7080_TX 5

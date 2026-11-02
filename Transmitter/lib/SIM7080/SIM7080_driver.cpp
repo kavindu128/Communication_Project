@@ -1,4 +1,4 @@
-# include "SIM7080_driver.h"
+#include "SIM7080_driver.h"
 
 #define TINY_GSM_MODEM_SIM7080
 #include <TinyGsmClient.h>
@@ -62,9 +62,9 @@ void SIM7080_Driver_Init()
     }
 }
 
-bool SIM7080_Driver_ConnectGPRS(const char* apn)
+bool SIM7080_Driver_ConnectGPRS(const char *apn)
 {
-    gprs_is_connected = modem.gprsConnect(apn, "","");
+    gprs_is_connected = modem.gprsConnect(apn, "", "");
 
     return gprs_is_connected;
 }
@@ -81,14 +81,13 @@ bool SIM7080_Driver_IsLinkUp()
     return gprs_is_connected;
 }
 
-
 void SIM7080_Driver_PowerOff()
 {
     gprs_is_connected = false;
     cellularClient.stop();
     modem.gprsDisconnect();
     modem.poweroff();
-    //powerOnSIM7080G();
+    // powerOnSIM7080G();
 }
 
 void SIM7080_Driver_SetDisconnected()
@@ -96,9 +95,7 @@ void SIM7080_Driver_SetDisconnected()
     gprs_is_connected = false;
 }
 
-Client* SIM7080_Driver_GetClient()
+Client *SIM7080_Driver_GetClient()
 {
     return &cellularClient;
 }
-
-

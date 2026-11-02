@@ -4,51 +4,58 @@
 // Initialize the modem using the Serial2 interface provided by the HAL
 static TinyGsm modem(SimSerial);
 static TinyGsmClient cellularClient(modem);
-static volatile bool gprs_is_connected = false;   // cached: read by other tasks without AT commands
- 
+static volatile bool gprs_is_connected = false; // cached: read by other tasks without AT commands
+
 SemaphoreHandle_t Sim7600ModemMutex = NULL;
- 
-void SIM7600_Driver_Init() {
-    gprs_is_connected = false;                 // modem is (re)starting: no link yet
+
+void SIM7600_Driver_Init()
+{
+    gprs_is_connected = false; // modem is (re)starting: no link yet
     SIM7600_HAL_Init();
- 
-    //Serial.println("Initializing TinyGSM modem...");
-    // modem.restart() automatically sends "AT", "ATI", and checks basic responses
-    if (xSemaphoreTake(Sim7600ModemMutex, portMAX_DELAY) == pdTRUE) {
+
+    // Serial.println("Initializing TinyGSM modem...");
+    //  modem.restart() automatically sends "AT", "ATI", and checks basic responses
+    if (xSemaphoreTake(Sim7600ModemMutex, portMAX_DELAY) == pdTRUE)
+    {
         modem.restart();
         xSemaphoreGive(Sim7600ModemMutex);
     }
 }
- 
-bool SIM7600_Driver_ConnectGPRS(const char* apn) {
-    //Serial.printf("Connecting to APN: %s\n", apn);
-    // gprsConnect() already opens the network (NETOPEN), nothing more to send
+
+bool SIM7600_Driver_ConnectGPRS(const char *apn)
+{
+    // Serial.printf("Connecting to APN: %s\n", apn);
+    //  gprsConnect() already opens the network (NETOPEN), nothing more to send
     gprs_is_connected = modem.gprsConnect(apn, "", "");
     return gprs_is_connected;
 }
- 
-bool SIM7600_Driver_IsConnected() {
+
+bool SIM7600_Driver_IsConnected()
+{
     gprs_is_connected = modem.isGprsConnected();
     return gprs_is_connected;
 }
- 
+
 // Cached flag only - NO AT command, safe to call from any task at any time
-bool SIM7600_Driver_IsLinkUp() {
+bool SIM7600_Driver_IsLinkUp()
+{
     return gprs_is_connected;
 }
 
-void SIM7600_Driver_PowerOff() {
+void SIM7600_Driver_PowerOff()
+{
     gprs_is_connected = false;
     cellularClient.stop();
     modem.gprsDisconnect();
-    modem.poweroff();      // if this does not compile: modem.sendAT("+CPOF"); modem.waitResponse();
+    modem.poweroff(); // if this does not compile: modem.sendAT("+CPOF"); modem.waitResponse();
 }
- 
-void SIM7600_Driver_SetDisconnected() {
+
+void SIM7600_Driver_SetDisconnected()
+{
     gprs_is_connected = false;
 }
- 
-Client* SIM7600_Driver_GetClient() {
+
+Client *SIM7600_Driver_GetClient()
+{
     return &cellularClient;
 }
- 

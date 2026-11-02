@@ -1,96 +1,148 @@
 #include "LoRa_driver.h"
+#include <string.h>
 
-SPIClass LoRaSPI(HSPI);
+HardwareSerial LoRaSerial(0);
 
-bool LoRa_init(uint32_t frequency)
+static bool LoRa_SendCommand(const char *command)
 {
-    Serial.println("Initializing LoRa SPI...");
-
-    LoRaSPI.begin(
-        LORA_SCK,
-        LORA_MISO,
-        LORA_MOSI,
-        LORA_SS
-    );
-
-    LoRa.setSPI(LoRaSPI);
-
-    LoRa.setPins(
-        LORA_SS,
-        LORA_RST,
-        LORA_DIO0
-    );
-
-    if (!LoRa.begin(frequency))
+    if (command == nullptr)
     {
-        Serial.println("LoRa.begin() FAILED");
         return false;
     }
 
-    Serial.println("LoRa.begin() SUCCESS");
+    char response[256] = {0};
+    uint16_t index = 0;
+
+    // Clear old responses
+    while (LoRaSerial.available())
+    {
+        LoRaSerial.read();
+    }
+
+    Serial.print("\nLoRa AT Command: ");
+    Serial.println(command);
+
+    // Send command
+    LoRaSerial.print(command);
+    LoRaSerial.print("\r\n");
+
+    uint32_t startTime = millis();
+
+    while (millis() - startTime < 3000)
+    {
+        while (LoRaSerial.available())
+        {
+            char c = LoRaSerial.read();
+
+            Serial.write(c);
+
+            if (index < sizeof(response) - 1)
+            {
+                response[index++] = c;
+                response[index] = '\0';
+            }
+
+            if (strstr(response, "ERROR") != nullptr ||
+                strstr(response, "AT_PARAM_ERROR") != nullptr ||
+                strstr(response, "AT_BUSY_ERROR") != nullptr)
+            {
+                Serial.println("\nLoRa command returned an error!");
+                return false;
+            }
+
+            if (strstr(response, "OK") != nullptr)
+            {
+                Serial.println("\nLoRa command accepted!");
+                return true;
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    Serial.println("\nLoRa command timeout!");
+    Serial.print("Received response: ");
+    Serial.println(response);
+
+    return false;
+}
+
+bool LoRa_init(uint32_t frequency)
+{
+
+    Serial.println("\nLoRa UART initialization...");
+    pinMode(LORA_RST, OUTPUT);
+    digitalWrite(LORA_RST, LOW);
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    digitalWrite(LORA_RST, HIGH);
+    vTaskDelay(pdMS_TO_TICKS(1500));
+
+    LoRaSerial.begin(LORA_BAUDRATE, SERIAL_8N1, LORA_RX, LORA_TX);
+
+    vTaskDelay(pdMS_TO_TICKS(2000));
+
+    if (!LoRa_SendCommand("AT"))
+    {
+        // Serial.println("ERROR: RAK3172 AT communication failed!");
+        return false;
+    }
+
+    // Step 2: Configure P2P mode
+    // Serial.println("\n[2] Configuring P2P mode...");
+
+    if (!LoRa_SendCommand("AT+NWM=0"))
+    {
+        // Serial.println("ERROR: P2P mode configuration failed!");
+        return false;
+    }
+
+    // Step 3: Configure P2P parameters
+    // Serial.println("\n[3] Configuring LoRa frequency...");
+
+    char command[80];
+
+    snprintf(command, sizeof(command), "AT+P2P=%lu:7:0:1:8:10", (unsigned long)frequency);
+
+    if (!LoRa_SendCommand(command))
+    {
+        Serial.println("ERROR: LoRa P2P configuration failed!");
+        return false;
+    }
+
+    Serial.println("\nRAK3172 initialized successfully!");
 
     return true;
 }
 
-
-bool LoRa_send(const uint8_t *data, uint16_t len)
+bool LoRa_sendPacket(const uint8_t *data, uint16_t len)
 {
-    if (data == NULL || len == 0)
+    if (data == nullptr || len == 0 || len > 255)
     {
+        Serial.println("Invalid LoRa packet!");
         return false;
     }
 
-    LoRa.beginPacket();
+    // 9 characters for prefix + 510 hex characters + null
+    char command[520];
 
-    LoRa.write(data, len);
+    uint16_t index = snprintf(command, sizeof(command), "AT+PSEND=");
 
-    int result = LoRa.endPacket();
-
-    return result == 1;
-}
-
-bool LoRa_receive(uint8_t *data, uint16_t len)
-{
-    if (data == NULL || len == 0)
+    // Convert binary data into hexadecimal
+    for (uint16_t i = 0; i < len; i++)
     {
-        return false;
-    }
+        int written = snprintf(command + index, sizeof(command) - index, "%02X", data[i]);
 
-    int packetSize = LoRa.parsePacket();
-
-    if (packetSize == 0)
-    {
-        return false;
-    }
-
-    Serial.printf(
-        "LoRa packet detected: %d bytes\n",
-        packetSize
-    );
-
-    if (packetSize != len)
-    {
-        Serial.printf(
-            "Packet size mismatch. Expected: %d, Received: %d\n",
-            len,
-            packetSize
-        );
-
-        while (LoRa.available())
+        if (written != 2)
         {
-            LoRa.read();
+            Serial.println("LoRa packet formatting failed!");
+            return false;
         }
 
-        return false;
+        index += written;
     }
 
-    uint16_t received = 0;
-
-    while (LoRa.available() && received < len)
-    {
-        data[received] = LoRa.read();
-        received++;
-    }
-
-    return received == len;
+    // Send packet
+    return LoRa_SendCommand(command);
 }

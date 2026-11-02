@@ -29,8 +29,7 @@ bool SPI_BuildFrame(
         memcpy(
             &frame->data[SPI_HEADER_SIZE],
             payload,
-            payload_length
-        );
+            payload_length);
     }
 
     return true;
@@ -53,17 +52,17 @@ bool SPI_ValidateFrame(const SPIFrame *frame)
 
     switch (packet_type)
     {
-        case POLL_PACKET:
-            return payload_length == 0;
+    case POLL_PACKET:
+        return payload_length == 0;
 
-        case SENSOR_PACKET:
-            return payload_length == sizeof(SensorPacket);
+    case SENSOR_PACKET:
+        return payload_length == sizeof(SensorPacket);
 
-        case NETWORK_STATUS_PACKET:
-            return payload_length == sizeof(NetworkStatusPacket);
+    case NETWORK_STATUS_PACKET:
+        return payload_length == sizeof(NetworkStatusPacket);
 
-        default:
-            return false;
+    default:
+        return false;
     }
 }
 
@@ -119,8 +118,7 @@ void SPI_Slave_app(void *pvParameters)
         bool result = SPI_Slave_Transfer(
             txFrame.data,
             rxFrame.data,
-            SPI_FRAME_SIZE
-        );
+            SPI_FRAME_SIZE);
 
         if (!result)
         {
@@ -133,8 +131,7 @@ void SPI_Slave_app(void *pvParameters)
             Serial.printf(
                 "Invalid SPI frame: type=%u, length=%u\n",
                 rxFrame.data[0],
-                rxFrame.data[1]
-            );
+                rxFrame.data[1]);
             continue;
         }
 
@@ -142,70 +139,66 @@ void SPI_Slave_app(void *pvParameters)
 
         switch (packetType)
         {
-            case POLL_PACKET:
+        case POLL_PACKET:
+        {
+            // Poll is not sensor data.
+            // Do not enqueue or publish sensor data.
+            break;
+        }
+
+        case SENSOR_PACKET:
+        {
+            SensorPacket receivedPacket = {};
+
+            memcpy(
+                &receivedPacket,
+                &rxFrame.data[SPI_HEADER_SIZE],
+                sizeof(SensorPacket));
+
+            // Ignore a repeated packet ID.
+            if (hasReceivedPacket &&
+                receivedPacket.packet_id == lastPacketId)
             {
-                // Poll is not sensor data.
-                // Do not enqueue or publish sensor data.
+                Serial.printf(
+                    "Duplicate sensor packet ignored: ID=%lu\n",
+                    (unsigned long)receivedPacket.packet_id);
                 break;
             }
 
-            case SENSOR_PACKET:
-            {
-                SensorPacket receivedPacket = {};
+            lastPacketId = receivedPacket.packet_id;
+            hasReceivedPacket = true;
 
-                memcpy(
+            Serial.printf(
+                "New sensor packet ID: %lu | "
+                "Water pH: %.2f | "
+                "Turbidity: %.2f | "
+                "Soil Moisture: %.2f | "
+                "Soil pH: %.2f\n",
+                (unsigned long)receivedPacket.packet_id,
+                receivedPacket.water_ph,
+                receivedPacket.turbidity,
+                receivedPacket.soil_moisture,
+                receivedPacket.soil_ph);
+
+            // Forward new sensor data to the Wi-Fi application.
+            if (xQueueSend(
+                    sensorData_from_SPI,
                     &receivedPacket,
-                    &rxFrame.data[SPI_HEADER_SIZE],
-                    sizeof(SensorPacket)
-                );
-
-                // Ignore a repeated packet ID.
-                if (hasReceivedPacket &&
-                    receivedPacket.packet_id == lastPacketId)
-                {
-                    Serial.printf(
-                        "Duplicate sensor packet ignored: ID=%lu\n",
-                        (unsigned long)receivedPacket.packet_id
-                    );
-                    break;
-                }
-
-                lastPacketId = receivedPacket.packet_id;
-                hasReceivedPacket = true;
-
-                Serial.printf(
-                    "New sensor packet ID: %lu | "
-                    "Water pH: %.2f | "
-                    "Turbidity: %.2f | "
-                    "Soil Moisture: %.2f | "
-                    "Soil pH: %.2f\n",
-                    (unsigned long)receivedPacket.packet_id,
-                    receivedPacket.water_ph,
-                    receivedPacket.turbidity,
-                    receivedPacket.soil_moisture,
-                    receivedPacket.soil_ph
-                );
-
-                // Forward new sensor data to the Wi-Fi application.
-                if (xQueueSend(
-                        sensorData_from_SPI,
-                        &receivedPacket,
-                        0) != pdTRUE)
-                {
-                    Serial.println("Sensor queue is full");
-                }
-
-                break;
-            }
-
-            default:
+                    0) != pdTRUE)
             {
-                Serial.printf(
-                    "Unexpected packet type: 0x%02X\n",
-                    packetType
-                );
-                break;
+                Serial.println("Sensor queue is full");
             }
+
+            break;
+        }
+
+        default:
+        {
+            Serial.printf(
+                "Unexpected packet type: 0x%02X\n",
+                packetType);
+            break;
+        }
         }
     }
 }

@@ -1,30 +1,36 @@
 #include "MQTT_app.h"
 #include "NetworkManager_app.h"
-                  
+
 TaskHandle_t MQTTAppHandle;
 
-#define MQTT_RETRY_MS          3000    // wait between failed broker connects
-#define MQTT_WIFI_TIMEOUT_S    5
-#define MQTT_CELL_TIMEOUT_S    30
+#define MQTT_RETRY_MS 3000 // wait between failed broker connects
+#define MQTT_WIFI_TIMEOUT_S 5
+#define MQTT_CELL_TIMEOUT_S 30
 
 volatile MQTT_Transport MQTT_App_BoundTransport = MQTT_TRANSPORT_NONE;
 volatile bool MQTT_App_Connected = false;
 
-static const char* transportName(MQTT_Transport t)
+static const char *transportName(MQTT_Transport t)
 {
     switch (t)
     {
-        case MQTT_TRANSPORT_WIFI: return "WiFi";
-        case MQTT_TRANSPORT_SIM7080: return "SIM7080";
-        case MQTT_TRANSPORT_SIM7600: return "SIM7600";
-        default: return "NONE";
+    case MQTT_TRANSPORT_WIFI:
+        return "WiFi";
+    case MQTT_TRANSPORT_SIM7080:
+        return "SIM7080";
+    case MQTT_TRANSPORT_SIM7600:
+        return "SIM7600";
+    default:
+        return "NONE";
     }
 }
 
 static SemaphoreHandle_t transportMutex(MQTT_Transport t)
 {
-    if (t == MQTT_TRANSPORT_SIM7080) return Sim7080ModemMutex;
-    if (t == MQTT_TRANSPORT_SIM7600) return Sim7600ModemMutex;
+    if (t == MQTT_TRANSPORT_SIM7080)
+        return Sim7080ModemMutex;
+    if (t == MQTT_TRANSPORT_SIM7600)
+        return Sim7600ModemMutex;
     return nullptr;
 }
 
@@ -37,12 +43,14 @@ static bool takeTransport(MQTT_Transport t, TickType_t wait)
 static void giveTransport(MQTT_Transport t)
 {
     SemaphoreHandle_t mutex = transportMutex(t);
-    if (mutex != nullptr) xSemaphoreGive(mutex);
+    if (mutex != nullptr)
+        xSemaphoreGive(mutex);
 }
 
 static void closeBoundTransport(MQTT_Transport old)
 {
-    if (old == MQTT_TRANSPORT_NONE) return;
+    if (old == MQTT_TRANSPORT_NONE)
+        return;
 
     if (old == MQTT_TRANSPORT_WIFI)
     {
@@ -52,8 +60,8 @@ static void closeBoundTransport(MQTT_Transport old)
 
     // Don't send AT commands if the modem is no longer connected/ready.
     bool ready = (old == MQTT_TRANSPORT_SIM7080)
-        ? (SIM7080_State == SIM7080_CONNECTED)
-        : (SIM7600_State == SIM7600_CONNECTED);
+                     ? (SIM7080_State == SIM7080_CONNECTED)
+                     : (SIM7600_State == SIM7600_CONNECTED);
 
     if (ready && takeTransport(old, pdMS_TO_TICKS(3000)))
     {
@@ -62,9 +70,7 @@ static void closeBoundTransport(MQTT_Transport old)
     }
 }
 
-
-
-void MQTT_App_ProcessCommand(const char* method, bool state)
+void MQTT_App_ProcessCommand(const char *method, bool state)
 {
     if (strcmp(method, "SIM7600") == 0)
         NetworkManager_HandleCommand(NETWORK_SIM7600, state);
@@ -82,16 +88,16 @@ void MQTT_App_ProcessCommand(const char* method, bool state)
 
     Serial.printf("MQTT RPC: %s %s command handled by Network Manager\n",
                   method, state ? "ON" : "OFF");
-
 }
 
-void MQTT_app(void *pvParameters) {
+void MQTT_app(void *pvParameters)
+{
 
     // No waiting for the SIM here: WiFi may be the only network for a while.
     MQTT_Driver_Init();
 
     SensorPacket dataToSend;
-    MQTT_Transport bound = MQTT_TRANSPORT_NONE;   // network the MQTT session is attached to
+    MQTT_Transport bound = MQTT_TRANSPORT_NONE; // network the MQTT session is attached to
     uint32_t nextConnectTry = 0;
 
     for (;;)
@@ -101,7 +107,7 @@ void MQTT_app(void *pvParameters) {
 
         if (wanted != bound)
         {
-            Serial.printf("MQTT route: %s -> %s\n",transportName(bound), transportName(wanted));
+            Serial.printf("MQTT route: %s -> %s\n", transportName(bound), transportName(wanted));
 
             closeBoundTransport(bound);
             bound = wanted;
@@ -111,7 +117,8 @@ void MQTT_app(void *pvParameters) {
             if (bound != MQTT_TRANSPORT_NONE)
             {
                 uint16_t timeout = (bound == MQTT_TRANSPORT_WIFI)
-                    ? MQTT_WIFI_TIMEOUT_S : MQTT_CELL_TIMEOUT_S;
+                                       ? MQTT_WIFI_TIMEOUT_S
+                                       : MQTT_CELL_TIMEOUT_S;
                 MQTT_Driver_BindClient(MQTT_HAL_GetClient(bound), timeout);
             }
             else
@@ -167,14 +174,14 @@ void MQTT_app(void *pvParameters) {
             {
                 char payload[256];
                 snprintf(payload, sizeof(payload),
-                    "{\"packet_id\":%u,\"water_ph\":%.2f,"
-                    "\"turbidity\":%.2f,\"soil_moisture\":%.2f,"
-                    "\"soil_ph\":%.2f}",
-                    (unsigned)dataToSend.packet_id,
-                    dataToSend.water_ph,
-                    dataToSend.turbidity,
-                    dataToSend.soil_moisture,
-                    dataToSend.soil_ph);
+                         "{\"packet_id\":%u,\"water_ph\":%.2f,"
+                         "\"turbidity\":%.2f,\"soil_moisture\":%.2f,"
+                         "\"soil_ph\":%.2f}",
+                         (unsigned)dataToSend.packet_id,
+                         dataToSend.water_ph,
+                         dataToSend.turbidity,
+                         dataToSend.soil_moisture,
+                         dataToSend.soil_ph);
 
                 if (MQTT_Driver_Publish("v1/devices/me/telemetry", payload))
                 {
@@ -192,6 +199,3 @@ void MQTT_app(void *pvParameters) {
         vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
-
-
-

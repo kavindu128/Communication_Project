@@ -3,7 +3,7 @@
 
 #include "SPI_Slave_driver.h"
 
-extern TaskHandle_t SPIAppHandle;   
+extern TaskHandle_t SPIAppHandle;
 
 void SPI_Slave_app(void *pvParameters);
 bool SPI_BuildFrame(SPIFrame *frame, uint8_t packet_type, const void *payload, uint8_t payload_length);

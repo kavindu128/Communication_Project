@@ -9,13 +9,12 @@
 #include "SPI_Packet.h"
 #include "WIFI_driver.h"
 
-
 void MQTT_Driver_Init();                                          // broker settings only, no network needed
-void MQTT_Driver_BindClient(Client* client, uint16_t timeoutSec); // attach to WiFi or 4G TCP stream
-bool MQTT_Driver_Connect(); 
-void MQTT_Driver_Disconnect();                                    // clean MQTT DISCONNECT + close socket
+void MQTT_Driver_BindClient(Client *client, uint16_t timeoutSec); // attach to WiFi or 4G TCP stream
+bool MQTT_Driver_Connect();
+void MQTT_Driver_Disconnect(); // clean MQTT DISCONNECT + close socket
 void MQTT_Driver_Loop();
-bool MQTT_Driver_Publish(const char* topic, const char* payload);
+bool MQTT_Driver_Publish(const char *topic, const char *payload);
 bool MQTT_Driver_IsConnected();
 bool MQTT_Driver_SubscribeCommands();
 

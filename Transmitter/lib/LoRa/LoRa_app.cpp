@@ -3,82 +3,120 @@
 #include "NetworkManager_app.h"
 
 TaskHandle_t LoRaAppHandle;
-volatile bool LoRa_IsReady = false;
 
-void LoRa_app(void* pvParameters)
+SemaphoreHandle_t LoRa_ON_FLAG = NULL;
+SemaphoreHandle_t LoRa_OFF_FLAG = NULL;
+SemaphoreHandle_t LoRa_READY_FLAG = NULL;
+
+uint8_t LoRa_State = LORA_IDLE;
+static SensorPacket packet;
+
+void LoRa_app_Init(void)
 {
-     Serial.println("LoRa Transmitter Starting...");
+    LoRa_ON_FLAG = xSemaphoreCreateBinary();
+    LoRa_OFF_FLAG = xSemaphoreCreateBinary();
+    LoRa_READY_FLAG = xSemaphoreCreateBinary();
+}
 
-    if (!LoRa_init(433E6))
-    {
-        LoRa_IsReady = false;
-        Serial.println("LoRa initialization failed");
-        vTaskDelete(NULL);
-        return;
-    }
-
-    LoRa_IsReady = true;
-    Serial.println("LoRa initialized successfully");
-
-     static SensorPacket packet;
+void LoRa_app(void *pvParameters)
+{
 
     while (1)
     {
-        // Do not consume the shared sensor queue unless LoRa is the selected route.
-        if (!NetworkManager_IsRouteSelected(NETWORK_LORA))
+        switch (LoRa_State)
         {
-            vTaskDelay(pdMS_TO_TICKS(100));
-            continue;
-        }
-
-        // Short wait lets the task notice a route change promptly.
-        if (xQueueReceive(
-                sensorData_from_SPI,
-                &packet,
-                pdMS_TO_TICKS(100)))
-        { 
-            if (!NetworkManager_IsRouteSelected(NETWORK_LORA))
+        case LORA_IDLE:
+            if (xSemaphoreTake(LoRa_ON_FLAG, portMAX_DELAY) == pdTRUE)
             {
-                // Route changed while waiting; keep the packet for the selected sender.
-                xQueueSendToFront(sensorData_from_SPI, &packet, 0);
-                continue;
+                xSemaphoreTake(LoRa_OFF_FLAG, 0);
+                Serial.println("LoRa: STARTING");
+                LoRa_State = LORA_STARTING;
             }
-            Serial.printf(
-                "Packet Received from Queue to LoRa: Packet %d | "
-                "Water pH: %.1f | "
-                "Turbidity: %.1f | "
-                "Soil Moisture: %.1f | "
-                "Soil pH: %.1f\n",
+            break;
 
-                packet.packet_id,
-                packet.water_ph,
-                packet.turbidity,
-                packet.soil_moisture,
-                packet.soil_ph
-            );
-
-            // Send SensorPacket through LoRa
-            if (LoRa_send(
-                    (const uint8_t *)&packet,
-                    sizeof(SensorPacket)))
+        case LORA_STARTING:
+            if (LoRa_init(LORA_FREQ))
             {
-                Serial.printf(
-                    "LoRa: Packet %d sent successfully\n",
-                    packet.packet_id
-                );
+                Serial.println("LoRa Initialized successfully");
+                Serial.println("LoRa: READY");
+                xSemaphoreGive(LoRa_READY_FLAG);
+                LoRa_State = LORA_READY;
             }
             else
             {
-                // Keep the packet for the next active route/retry.
-                xQueueSendToFront(sensorData_from_SPI, &packet, 0);
-                Serial.printf(
-                    "LoRa: Packet %d send failed; packet retained\n",
-                    packet.packet_id
-                );
+                Serial.println("LoRa initialization failed ");
+                LoRa_State = LORA_ERROR;
             }
+            break;
+
+        case LORA_READY:
+            if (xSemaphoreTake(LoRa_OFF_FLAG, 0) == pdTRUE) // Check OFF request
+            {
+                LoRa_State = LORA_OFF;
+                break;
+            }
+
+
+            if (xQueueReceive(sensorData_from_SPI, &packet, pdMS_TO_TICKS(100)) == pdPASS) // Receive sensor packet from SPI queue
+            {
+                if (xSemaphoreTake(LoRa_OFF_FLAG, 0) == pdTRUE) // Check route and OFF request again
+                {
+                    xQueueSendToFront(sensorData_from_SPI, &packet, 0);
+                    LoRa_State = LORA_OFF;
+                    break;
+                }
+
+                if (!NetworkManager_IsRouteSelected(NETWORK_LORA))
+                {
+                    xQueueSendToFront(sensorData_from_SPI, &packet, 0);
+                    break;
+                }
+
+                //Serial.printf("LoRa: Packet %d received from SPI queue\n", packet.packet_id);
+
+                if (LoRa_sendPacket((const uint8_t *)&packet, sizeof(SensorPacket))) // Send packet through LoRa driver
+                {
+                    Serial.printf("LoRa: Packet %d sent successfully\n", packet.packet_id);
+                }
+                else
+                {
+                    Serial.printf("LoRa: Packet %d send failed\n", packet.packet_id);
+
+                    xQueueSendToFront(sensorData_from_SPI, &packet, 0); // Return packet to queue for retry
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                }
+            }
+
+            break;
+
+        case LORA_OFF:
+            Serial.println("LoRa: OFF");
+
+            xSemaphoreTake(LoRa_READY_FLAG, 0); // Clear READY notification
+            xSemaphoreTake(LoRa_ON_FLAG, 0);    // Discard ON request received during shutdown
+
+            Serial.println("LoRa: IDLE");
+
+            LoRa_State = LORA_IDLE;
+            break;
+
+        case LORA_ERROR:
+
+            Serial.println("LoRa initialization failed.");
+            Serial.println("LoRa: Retrying in 3 seconds");
+
+            vTaskDelay(pdMS_TO_TICKS(3000));
+
+            LoRa_State = LORA_STARTING;
+
+            break;
+
+        default:
+
+            LoRa_State = LORA_IDLE;
+
+            break;
         }
-        
+         vTaskDelay(pdMS_TO_TICKS(100));
     }
-
 }
-
