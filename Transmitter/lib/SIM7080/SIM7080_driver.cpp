@@ -99,3 +99,24 @@ Client *SIM7080_Driver_GetClient()
 {
     return &cellularClient;
 }
+
+int SIM7080_Driver_GetSignalStrength()
+{
+    // Wait for the SIM7080 modem mutex
+    if (xSemaphoreTake(Sim7080ModemMutex, pdMS_TO_TICKS(3000)) != pdTRUE)
+    {
+        //Serial.println("SIM7080: Mutex BUSY!");
+        return -2;
+    }
+
+    int signal = -1;
+
+    if (modem.testAT())
+    {
+        signal = modem.getSignalQuality();
+    }
+
+    xSemaphoreGive(Sim7080ModemMutex);
+
+    return signal;
+}

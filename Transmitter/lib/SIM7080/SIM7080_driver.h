@@ -12,5 +12,6 @@ bool SIM7080_Driver_IsLinkUp();
 void SIM7080_Driver_PowerOff();
 void SIM7080_Driver_SetDisconnected();
 Client* SIM7080_Driver_GetClient();
+int SIM7080_Driver_GetSignalStrength();
 
 #endif

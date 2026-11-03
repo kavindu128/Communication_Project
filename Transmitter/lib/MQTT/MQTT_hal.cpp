@@ -8,10 +8,8 @@ static volatile MQTT_Transport preferredTransport = MQTT_TRANSPORT_NONE;
 
 void MQTT_HAL_SetPreferred(MQTT_Transport transport)
 {
-    if (transport == MQTT_TRANSPORT_WIFI || transport == MQTT_TRANSPORT_SIM7600 || transport == MQTT_TRANSPORT_SIM7080)
-    {
-        preferredTransport = transport;
-    }
+    preferredTransport = transport;
+    
 }
 
 MQTT_Transport MQTT_HAL_GetBestTransport()

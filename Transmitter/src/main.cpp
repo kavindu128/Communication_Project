@@ -9,6 +9,9 @@
 #include "MQTT_app.h"
 #include "NetworkManager_app.h"
 
+#include "SIM7600_driver.h"
+#include "SIM7080_driver.h"
+
 void setup()
 {
     Serial.begin(115200);
@@ -39,4 +42,13 @@ void setup()
 
 void loop()
 {
+    int signal_4G = SIM7600_Driver_GetSignalStrength();
+    int signal_NBIoT = SIM7080_Driver_GetSignalStrength();
+
+    Serial.print("Signal Strength (4G): ");
+    Serial.println(signal_4G);
+    Serial.print("Signal Strength (NBIoT): ");
+    Serial.println(signal_NBIoT);
+
+    vTaskDelay(pdMS_TO_TICKS(5000)); // Delay for 5 seconds before the next reading
 }

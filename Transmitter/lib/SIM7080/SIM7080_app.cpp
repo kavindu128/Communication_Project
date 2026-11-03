@@ -76,9 +76,7 @@ void SIM7080_app(void *pvParameters)
             else
             {
 
-                if (xSemaphoreTake(
-                        Sim7080ModemMutex,
-                        pdMS_TO_TICKS(5000)) == pdTRUE)
+                if (xSemaphoreTake(Sim7080ModemMutex, pdMS_TO_TICKS(5000)) == pdTRUE)
                 {
                     bool linkOk =
                         SIM7080_Driver_IsConnected();
@@ -91,8 +89,7 @@ void SIM7080_app(void *pvParameters)
                     }
                     else
                     {
-                        Serial.println(
-                            "SIM7080 link lost. Reconnecting...");
+                        Serial.println("SIM7080 link lost. Reconnecting...");
                         Serial.println("SIM7080: CONNECTING");
                         SIM7080_State = SIM7080_CONNECTING;
                     }

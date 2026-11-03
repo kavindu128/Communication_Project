@@ -59,3 +59,29 @@ Client *SIM7600_Driver_GetClient()
 {
     return &cellularClient;
 }
+
+int SIM7600_Driver_GetSignalStrength()
+{
+    // Serial.println("SIM7600: Waiting for modem mutex...");
+
+    if (xSemaphoreTake(Sim7600ModemMutex, pdMS_TO_TICKS(3000)) != pdTRUE)
+    {
+        //Serial.println("SIM7600: Mutex BUSY!");
+        return -2;
+    }
+
+    // Serial.println("SIM7600: Mutex acquired");
+
+    int signal = -1;
+
+    if (modem.testAT())
+    {
+        signal = modem.getSignalQuality();
+    }
+
+    xSemaphoreGive(Sim7600ModemMutex);
+
+    // Serial.println("SIM7600: Mutex released");
+
+    return signal;
+}
